@@ -16,7 +16,7 @@ import polars as pl
 from numba import njit
 
 FAMILIES = {0: "ema_cross", 1: "rsi_reversion", 2: "breakout"}
-INTERVALS = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h"}
+INTERVALS = {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "4h": "4h", "1d": "1d"}
 
 
 def load_data(path: Path) -> pl.DataFrame:
@@ -168,7 +168,7 @@ def make_signals(kind, fast, slow, close, high, low):
 
 @njit(cache=True)
 def simulate(signals, op, high, low, close, atr, days, start, end,
-             rr, atr_multiplier, cost_bps, direction):
+             rr, atr_multiplier, cost_bps, direction, modeling=1):
     """One trade per time, conservative stop-first bar collision; fill at next-bar open."""
     outcomes = np.empty(end-start, dtype=np.float64)
     trade_days = np.empty(end-start, dtype=np.int32)
@@ -192,7 +192,10 @@ def simulate(signals, op, high, low, close, atr, days, start, end,
             tp = entry + side * distance * rr
             trade_day = days[i]
         exit_price = np.nan
-        if side == 1:
+        if modeling == 0:
+            if (side == 1 and (op[i] <= sl or op[i] >= tp)) or (side == -1 and (op[i] >= sl or op[i] <= tp)):
+                exit_price = op[i]
+        elif side == 1:
             if op[i] <= sl:
                 exit_price = op[i]  # adverse gap at open
             elif low[i] <= sl:
@@ -218,10 +221,10 @@ def simulate(signals, op, high, low, close, atr, days, start, end,
     return outcomes[:ntr], trade_days[:ntr]
 
 
-def summarize(r: np.ndarray, days: np.ndarray, risk_pct: float, daily: float, total: float) -> dict:
+def summarize(r: np.ndarray, days: np.ndarray, risk_pct: float, daily: float, total: float, sizing: str = "compound", initial_deposit: float = 5000.) -> dict:
     if len(r) == 0:
         return dict(trades=0, win_rate=0., profit_factor=None, expectancy_r=0.,
-                    max_drawdown_pct=0., net_return_pct=0., daily_breached=False, total_breached=False)
+                    max_drawdown_pct=0., net_return_pct=0., daily_breached=False, total_breached=False, ending_balance=round(initial_deposit, 2))
     risk = risk_pct / 100.0
     equity = 1.0
     peak = 1.0
@@ -234,7 +237,10 @@ def summarize(r: np.ndarray, days: np.ndarray, risk_pct: float, daily: float, to
         if trade_day != prev_day:
             day_open = equity
             prev_day = trade_day
-        equity *= max(0.0, 1.0 + float(outcome) * risk)
+        if sizing == "fixed":
+            equity = max(0.0, equity + float(outcome) * risk)
+        else:
+            equity *= max(0.0, 1.0 + float(outcome) * risk)
         peak = max(peak, equity)
         dd = max(dd, (peak - equity) / peak * 100.0)
         daily_breached |= equity < day_open * (1.0 - daily / 100.0)
@@ -245,10 +251,11 @@ def summarize(r: np.ndarray, days: np.ndarray, risk_pct: float, daily: float, to
     return dict(trades=len(r), win_rate=round(float(np.mean(r > 0)) * 100, 2),
                 profit_factor=pf, expectancy_r=round(float(np.mean(r)), 4),
                 max_drawdown_pct=round(dd, 2), net_return_pct=round((equity - 1) * 100, 2),
-                daily_breached=bool(daily_breached), total_breached=bool(total_breached))
+                daily_breached=bool(daily_breached), total_breached=bool(total_breached),
+                ending_balance=round(initial_deposit * equity, 2))
 
 
-def bootstrap(r: np.ndarray, risk_pct: float, count: int, max_dd: float, seed: int) -> dict:
+def bootstrap(r: np.ndarray, risk_pct: float, count: int, max_dd: float, seed: int, sizing: str = "compound") -> dict:
     if len(r) == 0:
         return dict(p95_drawdown_pct=None, probability_10pct_drawdown=None, iterations=count, trade_count=0)
     generator = np.random.default_rng(seed)
@@ -256,7 +263,10 @@ def bootstrap(r: np.ndarray, risk_pct: float, count: int, max_dd: float, seed: i
     risk = risk_pct / 100.0
     for idx in range(count):
         sample = generator.choice(r, size=len(r), replace=True)
-        equity = np.concatenate(([1.], np.cumprod(np.maximum(0.0, 1.0 + sample * risk))))
+        if sizing == "fixed":
+            equity = np.maximum(0.0, np.concatenate(([1.], 1. + np.cumsum(sample * risk))))
+        else:
+            equity = np.concatenate(([1.], np.cumprod(np.maximum(0.0, 1.0 + sample * risk))))
         peaks = np.maximum.accumulate(equity)
         drawdowns[idx] = float(np.max((peaks - equity) / peaks) * 100)
     return dict(p95_drawdown_pct=round(float(np.percentile(drawdowns, 95)), 2),
