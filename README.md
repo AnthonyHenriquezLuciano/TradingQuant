@@ -59,3 +59,14 @@ Archivos OHLC con cabeceras `timestamp,open,high,low,close[,volume]` o `date,tim
 cd apps/api
 python -m pytest -q
 ```
+
+
+### Catálogo de indicadores y macroeconomía (fase actual)
+
+El Creador de Algoritmos ofrece las pestañas **Configuración** e **Indicadores**. Dentro de Indicadores, el catálogo se organiza en:
+
+- **Técnicos:** familias EMA, RSI y Donchian implementadas; el resto de indicadores del catálogo se identifican expresamente como «En desarrollo».
+- **Situaciones de mercado:** barridas de Londres, Tokio y PDH/PDL implementadas. El resto de escenarios (FVG, BOS, VWAP/POC, divergencias, apertura NY, etc.) aparece como referencia hasta que su motor esté disponible.
+- **Indicadores macroeconómicos:** grupos de volatilidad/riesgo, tipos de EE. UU., tipos internacionales, dólar/FX, inflación, empleo, actividad, liquidez, materias primas, sentimiento y derivados. La interfaz permite seleccionar series y preparar una regla (subida/bajada vs observación previa o umbral, más retardo mínimo). **No hay ingesta macro histórica conectada y esas reglas no se ejecutan.** Una sesión con reglas macro seleccionadas bloquea el backtest, tanto en la UI como en FastAPI, para evitar ignorarlas silenciosamente.
+
+La futura implementación de series macro debe conservar **vintage y observaciones históricas tal como se conocían entonces**, fecha real de publicación, revisiones, calendario, hora/zona y latencia. Una serie revisada actual no sirve para un backtest point-in-time sin controles adicionales.
