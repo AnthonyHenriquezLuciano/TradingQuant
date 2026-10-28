@@ -90,6 +90,8 @@ class ExplorationRequest(BaseModel):
                            "asia_high_sweep", "asia_low_sweep",
                            "previous_day_high_sweep", "previous_day_low_sweep"]]
     indicator_ranges: IndicatorRanges = Field(default_factory=IndicatorRanges)
+    macro_indicators: list[str] = Field(default_factory=list, max_length=200)
+    macro_rules: dict[str, dict] = Field(default_factory=dict)
     source_timezone: Literal["UTC","Europe/London","Europe/Athens","America/New_York","America/Santo_Domingo","Asia/Tokyo"] = "UTC"
     direction: Literal["long", "short", "both"] = "both"
     risk_pct: float = Field(default=0.5, ge=0.05, le=2)
@@ -106,6 +108,8 @@ class ExplorationRequest(BaseModel):
     def valid(self):
         if not self.families:
             raise ValueError("Selecciona al menos una familia de señales.")
+        if self.macro_indicators:
+            raise ValueError("Las series macroeconómicas necesitan datos point-in-time antes de ejecutar; aún no están habilitadas.")
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValueError("El inicio del periodo no puede ser posterior al final.")
         if self.multi_tf != "individual" and len(set(self.timeframes)) < 2:
