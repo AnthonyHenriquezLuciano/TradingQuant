@@ -27,19 +27,27 @@ app.add_middleware(
 
 class IndicatorRanges(BaseModel):
     ema_fast_min: int = Field(default=5, ge=2, le=100)
+    ema_fast_step: int = Field(default=1, ge=1, le=30)
     ema_fast_max: int = Field(default=28, ge=2, le=100)
     ema_slow_min: int = Field(default=29, ge=10, le=250)
+    ema_slow_step: int = Field(default=1, ge=1, le=30)
     ema_slow_max: int = Field(default=90, ge=10, le=250)
     rsi_period_min: int = Field(default=7, ge=2, le=60)
+    rsi_period_step: int = Field(default=1, ge=1, le=30)
     rsi_period_max: int = Field(default=25, ge=2, le=60)
     rsi_oversold_min: int = Field(default=20, ge=5, le=45)
+    rsi_oversold_step: int = Field(default=1, ge=1, le=30)
     rsi_oversold_max: int = Field(default=40, ge=5, le=45)
     breakout_lookback_min: int = Field(default=12, ge=5, le=250)
+    breakout_lookback_step: int = Field(default=1, ge=1, le=30)
     breakout_lookback_max: int = Field(default=75, ge=5, le=250)
+    sweep_buffer_min: int = Field(default=0, ge=0, le=30)
+    sweep_buffer_step: int = Field(default=1, ge=1, le=30)
+    sweep_buffer_max: int = Field(default=10, ge=0, le=30)
 
     @model_validator(mode="after")
     def valid_bounds(self):
-        for prefix in ("ema_fast", "ema_slow", "rsi_period", "rsi_oversold", "breakout_lookback"):
+        for prefix in ("ema_fast", "ema_slow", "rsi_period", "rsi_oversold", "breakout_lookback", "sweep_buffer"):
             if getattr(self, prefix + "_min") > getattr(self, prefix + "_max"):
                 raise ValueError("El mínimo de " + prefix + " supera el máximo.")
         if self.ema_fast_min + 8 > self.ema_slow_max:
@@ -62,8 +70,12 @@ class ExplorationRequest(BaseModel):
     multi_tf: Literal["individual","combined","both"] = "individual"
     generations: int = Field(default=8, ge=2, le=30)
     candidates: int = Field(default=100, ge=10, le=2000)
-    families: list[Literal["ema_cross", "rsi_reversion", "breakout"]]
+    families: list[Literal["ema_cross", "rsi_reversion", "breakout",
+                           "london_high_sweep", "london_low_sweep",
+                           "asia_high_sweep", "asia_low_sweep",
+                           "previous_day_high_sweep", "previous_day_low_sweep"]]
     indicator_ranges: IndicatorRanges = Field(default_factory=IndicatorRanges)
+    source_timezone: Literal["UTC","Europe/London","Europe/Athens","America/New_York","America/Santo_Domingo","Asia/Tokyo"] = "UTC"
     direction: Literal["long", "short", "both"] = "both"
     risk_pct: float = Field(default=0.5, ge=0.05, le=2)
     rr: float = Field(default=1, ge=0.2, le=5)
