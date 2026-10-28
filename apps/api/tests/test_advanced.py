@@ -88,3 +88,11 @@ def test_fixed_initial_risk_is_linear():
 def test_ticks_never_fallback_to_ohlc():
     with pytest.raises(ValueError,match="todavía no está implementado"):
         run_advanced(synthetic_bars(), config(modeling="ticks"))
+
+
+def test_reject_fake_upsampling_from_five_minute_source():
+    source = synthetic_bars(2600).filter(
+        pl.col("timestamp").dt.minute() % 5 == 0
+    )
+    with pytest.raises(ValueError, match="No se generan velas"):
+        run_advanced(source, config(timeframes=["1m"],timeframe="1m"))
