@@ -158,6 +158,17 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     if not families:
         raise ValueError("Selecciona alguna familia de indicadores.")
     source = filter_period(source, cfg)
+    # Never label M5 source bars as M1 by "resampling" into empty minute buckets.
+    source_step = source.select(
+        pl.col("timestamp").diff().dt.total_minutes().median()
+    ).item()
+    interval_minutes = {"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240,"1d":1440}
+    if source_step is not None and any(interval_minutes[tf] < float(source_step) - 1e-6 for tf in timeframes):
+        raise ValueError(
+            "El CSV tiene una resolución aproximada de "
+            + str(round(float(source_step),2))
+            + " minutos; selecciona intervalos iguales o mayores. No se generan velas de menor resolución."
+        )
     jobs = derive_scenarios(timeframes, multi)
     if budget < len(jobs):
         raise ValueError("El presupuesto debe permitir al menos una evaluación por intervalo.")
