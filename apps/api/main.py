@@ -10,7 +10,8 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
-from engine import load_data, run_exploration, describe_data
+from engine import load_data, describe_data
+from engine_advanced import run_advanced
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -28,9 +29,17 @@ class ExplorationRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     dataset_id: str
     symbol: str = Field(min_length=2, max_length=16)
-    timeframe: Literal["1m", "5m", "15m", "1h", "4h"] = "5m"
-    mode: Literal["random"] = "random"
-    candidates: int = Field(default=40, ge=1, le=100)
+    timeframe: Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d"] = "5m"
+    timeframes: list[Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d"]] = Field(default_factory=lambda: ["5m"], min_length=1, max_length=7)
+    start_date: str = ""
+    end_date: str = ""
+    initial_deposit: float = Field(default=5000, ge=100, le=100000000)
+    mode: Literal["random","genetic"] = "random"
+    modeling: Literal["open","ohlc"] = "ohlc"
+    sizing: Literal["compound","fixed"] = "compound"
+    multi_tf: Literal["individual","combined","both"] = "individual"
+    generations: int = Field(default=8, ge=2, le=30)
+    candidates: int = Field(default=100, ge=10, le=2000)
     families: list[Literal["ema_cross", "rsi_reversion", "breakout"]]
     direction: Literal["long", "short", "both"] = "both"
     risk_pct: float = Field(default=0.5, ge=0.05, le=2)
@@ -47,6 +56,10 @@ class ExplorationRequest(BaseModel):
     def valid(self):
         if not self.families:
             raise ValueError("Selecciona al menos una familia de señales.")
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("El inicio del periodo no puede ser posterior al final.")
+        if self.multi_tf != "individual" and len(set(self.timeframes)) < 2:
+            raise ValueError("Multi-TF combinado requiere 2 intervalos.")
         if self.prop_daily_pct > self.prop_max_pct:
             raise ValueError("El límite diario no debe superar el máximo total.")
         return self
@@ -102,7 +115,7 @@ def explore(config: ExplorationRequest):
         raise HTTPException(404, "Dataset no encontrado en esta instancia de la API. Reimporta el CSV.")
     try:
         frame = load_data(path)
-        result = run_exploration(frame, config.model_dump())
+        result = run_advanced(frame, config.model_dump())
         return {
             "id": str(uuid.uuid4()),
             "created_at": datetime.now(timezone.utc).isoformat(),
