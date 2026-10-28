@@ -25,6 +25,28 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
+class IndicatorRanges(BaseModel):
+    ema_fast_min: int = Field(default=5, ge=2, le=100)
+    ema_fast_max: int = Field(default=28, ge=2, le=100)
+    ema_slow_min: int = Field(default=29, ge=10, le=250)
+    ema_slow_max: int = Field(default=90, ge=10, le=250)
+    rsi_period_min: int = Field(default=7, ge=2, le=60)
+    rsi_period_max: int = Field(default=25, ge=2, le=60)
+    rsi_oversold_min: int = Field(default=20, ge=5, le=45)
+    rsi_oversold_max: int = Field(default=40, ge=5, le=45)
+    breakout_lookback_min: int = Field(default=12, ge=5, le=250)
+    breakout_lookback_max: int = Field(default=75, ge=5, le=250)
+
+    @model_validator(mode="after")
+    def valid_bounds(self):
+        for prefix in ("ema_fast", "ema_slow", "rsi_period", "rsi_oversold", "breakout_lookback"):
+            if getattr(self, prefix + "_min") > getattr(self, prefix + "_max"):
+                raise ValueError("El mínimo de " + prefix + " supera el máximo.")
+        if self.ema_fast_min + 8 > self.ema_slow_max:
+            raise ValueError("Los rangos EMA no permiten una pareja válida.")
+        return self
+
+
 class ExplorationRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     dataset_id: str
@@ -41,6 +63,7 @@ class ExplorationRequest(BaseModel):
     generations: int = Field(default=8, ge=2, le=30)
     candidates: int = Field(default=100, ge=10, le=2000)
     families: list[Literal["ema_cross", "rsi_reversion", "breakout"]]
+    indicator_ranges: IndicatorRanges = Field(default_factory=IndicatorRanges)
     direction: Literal["long", "short", "both"] = "both"
     risk_pct: float = Field(default=0.5, ge=0.05, le=2)
     rr: float = Field(default=1, ge=0.2, le=5)
