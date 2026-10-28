@@ -41,13 +41,28 @@ class IndicatorRanges(BaseModel):
     breakout_lookback_min: int = Field(default=12, ge=5, le=250)
     breakout_lookback_step: int = Field(default=1, ge=1, le=30)
     breakout_lookback_max: int = Field(default=75, ge=5, le=250)
-    sweep_buffer_min: int = Field(default=0, ge=0, le=30)
-    sweep_buffer_step: int = Field(default=1, ge=1, le=30)
-    sweep_buffer_max: int = Field(default=10, ge=0, le=30)
+    london_high_sweep_buffer_min: int = Field(default=0, ge=0, le=30)
+    london_high_sweep_buffer_step: int = Field(default=1, ge=1, le=30)
+    london_high_sweep_buffer_max: int = Field(default=10, ge=0, le=30)
+    london_low_sweep_buffer_min: int = Field(default=0, ge=0, le=30)
+    london_low_sweep_buffer_step: int = Field(default=1, ge=1, le=30)
+    london_low_sweep_buffer_max: int = Field(default=10, ge=0, le=30)
+    asia_high_sweep_buffer_min: int = Field(default=0, ge=0, le=30)
+    asia_high_sweep_buffer_step: int = Field(default=1, ge=1, le=30)
+    asia_high_sweep_buffer_max: int = Field(default=10, ge=0, le=30)
+    asia_low_sweep_buffer_min: int = Field(default=0, ge=0, le=30)
+    asia_low_sweep_buffer_step: int = Field(default=1, ge=1, le=30)
+    asia_low_sweep_buffer_max: int = Field(default=10, ge=0, le=30)
+    previous_day_high_sweep_buffer_min: int = Field(default=0, ge=0, le=30)
+    previous_day_high_sweep_buffer_step: int = Field(default=1, ge=1, le=30)
+    previous_day_high_sweep_buffer_max: int = Field(default=10, ge=0, le=30)
+    previous_day_low_sweep_buffer_min: int = Field(default=0, ge=0, le=30)
+    previous_day_low_sweep_buffer_step: int = Field(default=1, ge=1, le=30)
+    previous_day_low_sweep_buffer_max: int = Field(default=10, ge=0, le=30)
 
     @model_validator(mode="after")
     def valid_bounds(self):
-        for prefix in ("ema_fast", "ema_slow", "rsi_period", "rsi_oversold", "breakout_lookback", "sweep_buffer"):
+        for prefix in ("ema_fast", "ema_slow", "rsi_period", "rsi_oversold", "breakout_lookback", "london_high_sweep_buffer", "london_low_sweep_buffer", "asia_high_sweep_buffer", "asia_low_sweep_buffer", "previous_day_high_sweep_buffer", "previous_day_low_sweep_buffer"):
             if getattr(self, prefix + "_min") > getattr(self, prefix + "_max"):
                 raise ValueError("El mínimo de " + prefix + " supera el máximo.")
         if self.ema_fast_min + 8 > self.ema_slow_max:
