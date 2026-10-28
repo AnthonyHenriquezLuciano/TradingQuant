@@ -6,23 +6,30 @@ import {
  Dna, FlaskConical, LoaderCircle, Play, Settings2, ShieldCheck,
  SlidersHorizontal, Sparkles, UploadCloud, ChartNoAxesCombined, Activity, ListFilter, TrendingUp
 } from "lucide-react";
+import {IndicatorCatalog} from "./indicator-catalog";
 
 export type IndicatorRanges = {
- ema_fast_min:number;ema_fast_max:number;ema_slow_min:number;ema_slow_max:number;
- rsi_period_min:number;rsi_period_max:number;rsi_oversold_min:number;rsi_oversold_max:number;
- breakout_lookback_min:number;breakout_lookback_max:number;
+ ema_fast_min:number;ema_fast_step:number;ema_fast_max:number;
+ ema_slow_min:number;ema_slow_step:number;ema_slow_max:number;
+ rsi_period_min:number;rsi_period_step:number;rsi_period_max:number;
+ rsi_oversold_min:number;rsi_oversold_step:number;rsi_oversold_max:number;
+ breakout_lookback_min:number;breakout_lookback_step:number;breakout_lookback_max:number;
+ sweep_buffer_min:number;sweep_buffer_step:number;sweep_buffer_max:number;
 };
 export const DEFAULT_INDICATOR_RANGES:IndicatorRanges={
- ema_fast_min:5,ema_fast_max:28,ema_slow_min:29,ema_slow_max:90,
- rsi_period_min:7,rsi_period_max:25,rsi_oversold_min:20,rsi_oversold_max:40,
- breakout_lookback_min:12,breakout_lookback_max:75,
+ ema_fast_min:5,ema_fast_step:1,ema_fast_max:28,
+ ema_slow_min:29,ema_slow_step:1,ema_slow_max:90,
+ rsi_period_min:7,rsi_period_step:1,rsi_period_max:25,
+ rsi_oversold_min:20,rsi_oversold_step:1,rsi_oversold_max:40,
+ breakout_lookback_min:12,breakout_lookback_step:1,breakout_lookback_max:75,
+ sweep_buffer_min:0,sweep_buffer_step:1,sweep_buffer_max:10,
 };
 export type AlgoConfig = {
  name:string;dataset_id:string;symbol:string;timeframe:string;timeframes:string[];
  start_date:string;end_date:string;initial_deposit:number;mode:"random"|"genetic";
  modeling:"open"|"ohlc"|"m1"|"ticks";sizing:"compound"|"fixed";
  multi_tf:"individual"|"combined"|"both";generations:number;candidates:number;
- families:string[];indicator_ranges:IndicatorRanges;direction:"long"|"short"|"both";risk_pct:number;rr:number;
+ families:string[];indicator_ranges:IndicatorRanges;source_timezone:string;direction:"long"|"short"|"both";risk_pct:number;rr:number;
  atr_multiplier:number;cost_bps:number;is_ratio:number;min_trades:number;
  mc_iterations:number;prop_daily_pct:number;prop_max_pct:number;
 };
@@ -66,13 +73,16 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
  const ranges={...DEFAULT_INDICATOR_RANGES,...c.indicator_ranges};
  const multiNeedsTwo=c.multi_tf!=="individual"&&tfs.length<2;
  const invalidPeriod=Boolean(c.start_date&&c.end_date&&c.start_date>c.end_date);
- const invalidRanges=Object.keys(DEFAULT_INDICATOR_RANGES).some(k=>!Number.isInteger(ranges[k as keyof IndicatorRanges])) ||
-    ranges.ema_fast_min>ranges.ema_fast_max ||
-    ranges.ema_slow_min>ranges.ema_slow_max ||
-    ranges.rsi_period_min>ranges.rsi_period_max ||
-    ranges.rsi_oversold_min>ranges.rsi_oversold_max ||
-    ranges.breakout_lookback_min>ranges.breakout_lookback_max ||
-    ranges.ema_slow_max<ranges.ema_fast_min+8;
+ const invalidRanges=(
+  ["ema_fast","ema_slow","rsi_period","rsi_oversold","breakout_lookback","sweep_buffer"] as const
+ ).some(name=>{
+  const min=ranges[(name+"_min") as keyof IndicatorRanges];
+  const max=ranges[(name+"_max") as keyof IndicatorRanges];
+  const step=ranges[(name+"_step") as keyof IndicatorRanges];
+  const lower=name==="sweep_buffer"?0:name==="ema_fast"||name==="rsi_period"?2:name==="ema_slow"?10:name==="rsi_oversold"?5:5;
+  const upper=name==="sweep_buffer"?30:name==="ema_fast"?100:name==="ema_slow"||name==="breakout_lookback"?250:name==="rsi_period"?60:45;
+  return !Number.isInteger(min)||!Number.isInteger(max)||!Number.isInteger(step)||step<1||step>30||min<lower||max>upper||min>max;
+ })||ranges.ema_fast_min+8>ranges.ema_slow_max;
  const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||c.candidates<10;
  const missing=[
   ...(!c.symbol?["símbolo"]:[]),
@@ -138,34 +148,8 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
     <div><div className="tq-one-ready"><ShieldCheck size={16}/><strong>{missing.length?"Configuración pendiente":"Configuración completa"}</strong></div><p>{missing.length?"Falta: "+missing.join(", "):"Revisa los parámetros antes de ejecutar."}</p></div>
     <button className="btn btn-primary" disabled={cannotRun} onClick={onExecute}>{loading?<LoaderCircle className="spin" size={17}/>:<Play size={16}/>} {loading?"Ejecutando...":"Iniciar exploración"} <ArrowRight size={16}/></button>
    </div>
-  </div>:<div className="tq-one-panel tq-indicator-panel">
-    <div className="tq-one-panel-header"><div className="tq-one-header-icon"><ChartNoAxesCombined size={19}/></div><div><strong>Indicadores y parámetros</strong><span>Define qué familias se exploran y sus rangos de búsqueda</span></div><span className="tq-one-header-tag">RANGOS DEL MOTOR</span></div>
-    <div className="tq-indicator-body">
-      <div className="tq-indicator-intro"><ListFilter size={18}/><span>Selecciona uno o varios grupos. El motor probará parámetros dentro de los mínimos y máximos indicados, sin utilizar el tramo fuera de muestra para elegirlos.</span></div>
-      {([
-       {id:"ema_cross",title:"Medias móviles exponenciales (EMA)",desc:"Cruces entre EMA rápida y lenta para detectar cambios de tendencia.",icon:TrendingUp,inputs:[["ema_fast_min","EMA rápida · desde",2,100],["ema_fast_max","EMA rápida · hasta",2,100],["ema_slow_min","EMA lenta · desde",10,250],["ema_slow_max","EMA lenta · hasta",10,250]]},
-       {id:"rsi_reversion",title:"Índice de Fuerza Relativa (RSI)",desc:"Reversión tras recuperar o perder umbrales de sobrecompra y sobreventa.",icon:Activity,inputs:[["rsi_period_min","Periodo RSI · desde",2,60],["rsi_period_max","Periodo RSI · hasta",2,60],["rsi_oversold_min","Sobreventa · desde",5,45],["rsi_oversold_max","Sobreventa · hasta",5,45]]},
-       {id:"breakout",title:"Ruptura de canal (Breakout)",desc:"Entradas cuando el cierre supera los extremos de las velas anteriores.",icon:ChartNoAxesCombined,inputs:[["breakout_lookback_min","Velas de canal · desde",5,250],["breakout_lookback_max","Velas de canal · hasta",5,250]]}
-      ] as {id:string;title:string;desc:string;icon:typeof Activity;inputs:(string|number)[][]}[]).map(group=>{
-        const enabled=c.families.includes(group.id);
-        const Icon=group.icon;
-        return <section className={"tq-indicator-card "+(enabled?"enabled":"")} key={group.id}>
-          <div className="tq-indicator-card-top"><button type="button" className="tq-indicator-toggle" role="switch" aria-checked={enabled} aria-label={"Activar "+group.title}
-             onClick={()=>{const next=enabled?c.families.filter(f=>f!==group.id):[...c.families,group.id];update("families",next)}}>
-             <span className={"tq-switch "+(enabled?"on":"")}><span/></span>
-             <span className="tq-indicator-symbol"><Icon size={19}/></span>
-             <span className="tq-indicator-text"><strong>{group.title}</strong><small>{group.desc}</small></span>
-          </button><span className={"tq-indicator-state "+(enabled?"on":"")}>{enabled?"Incluido":"Excluido"}</span></div>
-          {enabled&&<div className="tq-indicator-inputs">{group.inputs.map(([key,label,min,max])=><label key={key} className="tq-indicator-field"><span>{label}</span><input type="number" min={min} max={max} step={1}
-           value={ranges[key as keyof IndicatorRanges]} onChange={e=>{const v=Math.max(Number(min),Math.min(Number(max),Number(e.target.value)||Number(min)));update("indicator_ranges",{...ranges,[key]:v})}}/></label>)}</div>}
-        </section>
-      })}
-      {invalidRanges&&<div className="tq-one-error tq-indicator-error">Revisa los rangos: los mínimos no pueden ser superiores a los máximos y debe existir una pareja EMA rápida/lenta válida.</div>}
-      {!c.families.length&&<div className="tq-one-error tq-indicator-error">Activa al menos un indicador para poder iniciar la exploración.</div>}
-      <div className="tq-indicator-engine-note"><ShieldCheck size={16}/> Estos rangos afectan directamente la exploración aleatoria y genética. Las estrategias EMA, RSI y Breakout están disponibles; los demás indicadores se incorporarán conforme se implemente su lógica científica.</div>
-    </div>
-    <footer className="tq-one-footer"><div><div className="tq-one-ready"><Check size={15}/><strong>{c.families.length} familias seleccionadas</strong></div><p>Configuración guardada por sesión en este navegador.</p></div><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer>
-  </div>}
+  </div>:<div className="tq-one-panel tq-indicator-panel"><div className="tq-one-panel-header"><div className="tq-one-header-icon"><ChartNoAxesCombined size={19}/></div><div><strong>Indicadores y situaciones de mercado</strong><span>Señales técnicas, patrones de liquidez y parámetros Desde / Pasos / Hasta</span></div><span className="tq-one-header-tag">CATÁLOGO</span></div><IndicatorCatalog families={c.families} ranges={ranges} sourceTimezone={c.source_timezone||"UTC"} onFamilies={v=>update("families",v)} onRanges={v=>update("indicator_ranges",v)} onTimezone={v=>update("source_timezone",v)}/><footer className="tq-one-footer"><div><div className="tq-one-ready"><Check size={15}/><strong>{c.families.length} elementos seleccionados</strong></div><p>Todos los cambios se guardan en esta sesión.</p></div><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>}
+
   <div className="tq-one-footnote"><Sparkles size={14}/> Investigación cuantitativa · Resultados OOS no garantizan rendimiento futuro · Modelado M1/tick pendiente de integración.</div>
  </div>;
 }
