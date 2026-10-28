@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SessionOverview, type AlgoSession } from "./session-overview";
-import { StrategyConfigurator, type AlgoConfig } from "./strategy-configurator";
+import { StrategyConfigurator, DEFAULT_INDICATOR_RANGES, type AlgoConfig } from "./strategy-configurator";
 
 type View = "home" | "sessions" | "builder" | "datasets" | "results" | "validation";
 type Dataset = { id:string; filename:string; rows:number; start:string; end:string; timeframe:string; uploaded_at:string };
@@ -24,7 +24,7 @@ type Metrics = { trades:number; win_rate:number; profit_factor:number|null; expe
 type RunResult = { id:string; created_at:string; dataset_id:string; tested:number; accepted:number; candidates:Candidate[]; warnings:string[]; config:Config };
 type Config = AlgoConfig;
 const API=process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const DEFAULT:Config={ name:"Nueva exploración cuantitativa",dataset_id:"",symbol:"XAUUSD",timeframe:"5m",timeframes:["5m"],start_date:"",end_date:"",initial_deposit:5000,mode:"random",modeling:"ohlc",sizing:"compound",multi_tf:"individual",generations:8,candidates:100,families:["ema_cross","rsi_reversion","breakout"],direction:"both",risk_pct:0.5,rr:1.0,atr_multiplier:1.5,cost_bps:2,is_ratio:70,min_trades:12,mc_iterations:500,prop_daily_pct:3,prop_max_pct:10 };
+const DEFAULT:Config={ name:"Nueva exploración cuantitativa",dataset_id:"",symbol:"XAUUSD",timeframe:"5m",timeframes:["5m"],start_date:"",end_date:"",initial_deposit:5000,mode:"random",modeling:"ohlc",sizing:"compound",multi_tf:"individual",generations:8,candidates:100,families:["ema_cross","rsi_reversion","breakout"],indicator_ranges:DEFAULT_INDICATOR_RANGES,direction:"both",risk_pct:0.5,rr:1.0,atr_multiplier:1.5,cost_bps:2,is_ratio:70,min_trades:12,mc_iterations:500,prop_daily_pct:3,prop_max_pct:10 };
 const STEPS=[{title:"Mercado y datos",sub:"Fuente y búsqueda"},{title:"Señales",sub:"Hipótesis y reglas"},{title:"Ejecución",sub:"Riesgo y costes"},{title:"Validación",sub:"Pruebas y filtros"}];
 const formatDate=(value:string)=>{const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleDateString("es-DO",{day:"2-digit",month:"short",year:"numeric"})};
 const n2=(x:number|null|undefined,d=2)=>x===null||x===undefined?"—":Number(x).toFixed(d);
@@ -85,7 +85,7 @@ export default function Page(){
  function editSession(id:string){
    const target=sessions.find(s=>s.id===id);
    if(!target)return;
-   setActiveSessionId(target.id);setCfg({...DEFAULT,...target.config,timeframes:target.config.timeframes?.length?target.config.timeframes:[target.config.timeframe||"5m"]});setStep(0);open("builder");
+   setActiveSessionId(target.id);setCfg({...DEFAULT,...target.config,timeframes:target.config.timeframes?.length?target.config.timeframes:[target.config.timeframe||"5m"],indicator_ranges:{...DEFAULT_INDICATOR_RANGES,...target.config.indicator_ranges}});setStep(0);open("builder");
  }
  function deleteSession(id:string){
    const target=sessions.find(s=>s.id===id);
