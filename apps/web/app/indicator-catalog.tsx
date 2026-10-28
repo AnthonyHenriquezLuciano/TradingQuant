@@ -1,154 +1,161 @@
 "use client";
 
 import {useMemo,useState} from "react";
-import {Search, Plus, X, ChartNoAxesCombined, Waves, SlidersHorizontal, CircleHelp, Clock3, Check, MapPin, ChevronDown, ShieldCheck, Sparkles} from "lucide-react";
+import {
+  Search,Plus,X,ChartNoAxesCombined,Waves,SlidersHorizontal,Clock3,Check,
+  MapPin,ChevronDown,ShieldCheck,Landmark,Activity,CalendarDays,Info
+} from "lucide-react";
 import type {IndicatorRanges} from "./strategy-configurator";
+import {CATALOG_GROUPS,CATALOG_ITEMS,MACRO_GROUPS,MACRO_SERIES,type CatalogKind,type CatalogItem,type MacroSeries} from "./indicator-data";
+
+export type MacroRule={
+ condition:"rising"|"falling"|"above"|"below";
+ threshold:number;
+ min_release_lag_days:number;
+};
 
 type Props={
  families:string[];ranges:IndicatorRanges;sourceTimezone:string;
- onFamilies:(families:string[])=>void;
- onRanges:(ranges:IndicatorRanges)=>void;
- onTimezone:(zone:string)=>void;
+ macroIndicators:string[];macroRules:Record<string,MacroRule>;
+ onFamilies:(families:string[])=>void;onRanges:(ranges:IndicatorRanges)=>void;
+ onTimezone:(zone:string)=>void;onMacroIndicators:(ids:string[])=>void;
+ onMacroRules:(rules:Record<string,MacroRule>)=>void;
 };
-type Item={id:string;name:string;kind:"technical"|"situation";description:string;enabled:boolean;paramGroups:string[]};
-const ITEMS:Item[]=[
- {id:"ema_cross",name:"Cruce EMA",kind:"technical",description:"Cruce de EMA rápida y lenta; seguimiento de tendencia.",enabled:true,paramGroups:["ema_fast","ema_slow"]},
- {id:"rsi_reversion",name:"RSI · reversión",kind:"technical",description:"Cruce de umbrales de sobreventa y sobrecompra simétrica.",enabled:true,paramGroups:["rsi_period","rsi_oversold"]},
- {id:"breakout",name:"Ruptura Donchian",kind:"technical",description:"Ruptura del máximo/mínimo del canal de N velas.",enabled:true,paramGroups:["breakout_lookback"]},
- {id:"london_high_sweep",name:"Barrida del máximo de Londres",kind:"situation",description:"Tras cerrar Londres, rompe su máximo y cierra nuevamente debajo → Short.",enabled:true,paramGroups:["london_high_sweep_buffer"]},
- {id:"london_low_sweep",name:"Barrida del mínimo de Londres",kind:"situation",description:"Tras cerrar Londres, rompe su mínimo y recupera el nivel → Long.",enabled:true,paramGroups:["london_low_sweep_buffer"]},
- {id:"asia_high_sweep",name:"Barrida del máximo de Asia",kind:"situation",description:"Tras cerrar Tokio, rompe su máximo y cierra por debajo → Short.",enabled:true,paramGroups:["asia_high_sweep_buffer"]},
- {id:"asia_low_sweep",name:"Barrida del mínimo de Asia",kind:"situation",description:"Tras cerrar Tokio, rompe su mínimo y cierra por encima → Long.",enabled:true,paramGroups:["asia_low_sweep_buffer"]},
- {id:"previous_day_high_sweep",name:"Barrida del máximo del día anterior (PDH)",kind:"situation",description:"Rompe el máximo del último día con datos y cierra debajo → Short.",enabled:true,paramGroups:["previous_day_high_sweep_buffer"]},
- {id:"previous_day_low_sweep",name:"Barrida del mínimo del día anterior (PDL)",kind:"situation",description:"Rompe el mínimo del último día con datos y cierra encima → Long.",enabled:true,paramGroups:["previous_day_low_sweep_buffer"]},
- {id:"adx",name:"ADX",kind:"technical",description:"Fuerza de tendencia. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"macd",name:"MACD",kind:"technical",description:"Convergencia/divergencia. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"bollinger",name:"Bandas de Bollinger",kind:"technical",description:"Volatilidad y desviaciones. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"sma",name:"Cruce SMA / MA",kind:"technical",description:"Cruces de medias simples. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"ema200",name:"EMA 200",kind:"technical",description:"Filtro de tendencia por EMA. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"stochastic",name:"Estocástico",kind:"technical",description:"Oscilador de momentum. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"supertrend",name:"SuperTrend",kind:"technical",description:"Tendencia ATR. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"kama",name:"KAMA",kind:"technical",description:"Media adaptativa. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"vwap",name:"VWAP",kind:"technical",description:"Precio medio ponderado por volumen. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"cci",name:"CCI",kind:"technical",description:"Oscilador Commodity Channel. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"mfi",name:"MFI",kind:"technical",description:"Índice de flujo monetario. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"obv",name:"OBV",kind:"technical",description:"Volumen acumulado. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"ichimoku",name:"Ichimoku",kind:"technical",description:"Nube y tendencia. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"keltner",name:"Canales Keltner",kind:"technical",description:"Bandas de volatilidad. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"rsi_divergence",name:"Divergencia RSI",kind:"situation",description:"Desacuerdo precio/oscilador. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"fvg",name:"Fair Value Gap (FVG)",kind:"situation",description:"Desequilibrios de tres velas. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"bos",name:"Break of Structure (BOS)",kind:"situation",description:"Ruptura estructural de mercado. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"choc",name:"Change of Character (CHoCH)",kind:"situation",description:"Cambio de estructura. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"poc_retest",name:"Retorno al POC",kind:"situation",description:"Revisita al punto de control del volumen. Motor pendiente.",enabled:false,paramGroups:[]},
- {id:"vwap_reclaim",name:"Recuperación de VWAP",kind:"situation",description:"Retorno sobre el VWAP de sesión. Motor pendiente.",enabled:false,paramGroups:[]},
-];
+
 const PARAMS:Record<string,{name:string;min:number;max:number;unit?:string}>={
  ema_fast:{name:"EMA rápida · periodo",min:2,max:100},
  ema_slow:{name:"EMA lenta · periodo",min:10,max:250},
  rsi_period:{name:"RSI · periodo",min:2,max:60},
  rsi_oversold:{name:"RSI · sobreventa",min:5,max:45},
  breakout_lookback:{name:"Canal · velas",min:5,max:250},
- london_high_sweep_buffer:{name:"Exceso mínimo",min:0,max:30,unit:"bps"},
- london_low_sweep_buffer:{name:"Exceso mínimo",min:0,max:30,unit:"bps"},
- asia_high_sweep_buffer:{name:"Exceso mínimo",min:0,max:30,unit:"bps"},
- asia_low_sweep_buffer:{name:"Exceso mínimo",min:0,max:30,unit:"bps"},
- previous_day_high_sweep_buffer:{name:"Exceso mínimo",min:0,max:30,unit:"bps"},
- previous_day_low_sweep_buffer:{name:"Exceso mínimo",min:0,max:30,unit:"bps"},
+ ...Object.fromEntries(
+ ["london_high_sweep","london_low_sweep","asia_high_sweep","asia_low_sweep","previous_day_high_sweep","previous_day_low_sweep"]
+ .map(id=>[id+"_buffer",{name:"Barrida mínima",min:0,max:30,unit:"bps"}])
+ )
 };
 const ZONES=[
- ["UTC","UTC · histórico en hora universal"],
- ["Europe/London","Europe/London · horario británico"],
- ["Europe/Athens","Europe/Athens · GMT+2/+3"],
- ["America/New_York","America/New_York · NY"],
- ["America/Santo_Domingo","America/Santo_Domingo · RD"],
- ["Asia/Tokyo","Asia/Tokyo · Tokio"],
+ ["UTC","UTC · hora universal"],["Europe/London","Europe/London · Reino Unido"],
+ ["Europe/Athens","Europe/Athens"],["America/New_York","America/New_York"],
+ ["America/Santo_Domingo","America/Santo_Domingo · RD"],["Asia/Tokyo","Asia/Tokyo"]
 ];
+const STATUS:Record<CatalogKind,string>={technical:"Indicadores técnicos",situation:"Situaciones del mercado",macro:"Indicadores macroeconómicos"};
+const newRule=():MacroRule=>({condition:"rising",threshold:0,min_release_lag_days:1});
+const format=(n:number)=>new Intl.NumberFormat("es-DO",{maximumFractionDigits:0}).format(n);
 
-export function IndicatorCatalog({families,ranges,sourceTimezone,onFamilies,onRanges,onTimezone}:Props){
+export function IndicatorCatalog({
+ families,ranges,sourceTimezone,macroIndicators,macroRules,
+ onFamilies,onRanges,onTimezone,onMacroIndicators,onMacroRules
+}:Props){
+ const [category,setCategory]=useState<CatalogKind>("technical");
  const [open,setOpen]=useState(false);
  const [query,setQuery]=useState("");
- const [kind,setKind]=useState<"technical"|"situation">("technical");
- const [showUnavailable,setShowUnavailable]=useState(false);
- const filtered=useMemo(()=>ITEMS.filter(i=>i.kind===kind&&(showUnavailable||i.enabled)&&
-  (i.name+" "+i.description).toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es").trim())),[kind,query,showUnavailable]);
- const chosen=ITEMS.filter(i=>families.includes(i.id)&&i.enabled);
- const anySituation=chosen.some(i=>i.kind==="situation");
- const rangesFor=(prefix:string)=>{
-  const keys=["min","step","max"] as const;
-  return keys.map(s=>Number(ranges[(prefix+"_"+s) as keyof IndicatorRanges]));
- };
- const size=chosen.reduce((total,item)=>{
-  const variants=item.paramGroups.reduce((value,p)=>{
-   const [from,step,to]=rangesFor(p);
-   return value*Math.max(0,Math.floor((to-from)/Math.max(1,step))+1);
-  },1);
-  return total+variants;
- },0);
- const hasBad=Object.keys(PARAMS).some(k=>{
-  const [a,step,b]=rangesFor(k);
-  const meta=PARAMS[k];return !Number.isInteger(a)||!Number.isInteger(step)||!Number.isInteger(b)||a> b||step<1||a<meta.min||b>meta.max;
- })||(ranges.ema_fast_min+8>ranges.ema_slow_max);
- function add(id:string){if(!families.includes(id))onFamilies([...families,id]);setOpen(false);setQuery("")}
- function remove(id:string){onFamilies(families.filter(x=>x!==id))}
- function change(prefix:string,field:"min"|"step"|"max",value:string){
-  const v=Number(value);
-  if(!Number.isFinite(v))return;
-  onRanges({...ranges,[prefix+"_"+field]:Math.trunc(v)});
- }
+ const [onlyAvailable,setOnlyAvailable]=useState(false);
+ const [expanded,setExpanded]=useState<string[]>([]);
+ const selectedItems=CATALOG_ITEMS.filter(item=>item.kind===category&&families.includes(item.id)&&item.enabled);
+ const selectedMacro=MACRO_SERIES.filter(item=>macroIndicators.includes(item.id));
+ const total=category==="macro"?selectedMacro.length:selectedItems.length;
+ const categoryItems=useMemo(()=>CATALOG_ITEMS.filter(i=>i.kind===category),[category]);
+ const filtered=useMemo(()=>categoryItems.filter(item=>
+  (!onlyAvailable||item.enabled)&&
+  (item.name+" "+item.description).toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es").trim())
+ ),[categoryItems,query,onlyAvailable]);
+ const macroFiltered=useMemo(()=>MACRO_GROUPS.map(group=>({
+  ...group,series:group.series.filter(item=>(item.name+" "+group.title).toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es").trim()))
+ })).filter(group=>group.series.length),[query]);
+ const hasSituation=families.some(id=>CATALOG_ITEMS.some(i=>i.id===id&&i.kind==="situation"&&i.enabled));
+ const rangesFor=(prefix:string)=>(["min","step","max"] as const).map(k=>Number(ranges[(prefix+"_"+k) as keyof IndicatorRanges]));
+ const paramSpace=CATALOG_ITEMS.filter(i=>i.enabled&&families.includes(i.id)).reduce((sum,i)=>
+  sum+i.paramGroups.reduce((product,p)=>{const [from,step,to]=rangesFor(p);return product*Math.max(0,Math.floor((to-from)/Math.max(1,step))+1)},1),0);
+ const invalid=Object.entries(PARAMS).some(([name,meta])=>{const [from,step,to]=rangesFor(name);return !Number.isInteger(from)||!Number.isInteger(step)||!Number.isInteger(to)||from>to||from<meta.min||to>meta.max||step<1||step>30});
+ function chooseCategory(next:CatalogKind){setCategory(next);setOpen(false);setQuery("");setExpanded([])}
+ function addItem(item:CatalogItem){if(!item.enabled||families.includes(item.id))return;onFamilies([...families,item.id]);setOpen(false);setQuery("")}
+ function addMacro(item:MacroSeries){if(macroIndicators.includes(item.id))return;onMacroIndicators([...macroIndicators,item.id]);onMacroRules({...macroRules,[item.id]:newRule()});setOpen(false);setQuery("")}
+ function removeMacro(id:string){onMacroIndicators(macroIndicators.filter(i=>i!==id));const next={...macroRules};delete next[id];onMacroRules(next)}
+ function updateRule(id:string,patch:Partial<MacroRule>){onMacroRules({...macroRules,[id]:{...(macroRules[id]||newRule()),...patch}})}
+ function updateRange(name:string,key:"min"|"step"|"max",raw:string){const value=Number(raw);if(!Number.isFinite(value))return;onRanges({...ranges,[name+"_"+key]:Math.trunc(value)})}
+ function toggleGroup(id:string){setExpanded(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])}
  return <div className="tq-catalog">
+  <div className="tq-library-categories" role="tablist" aria-label="Tipos de indicadores">
+   <button role="tab" aria-selected={category==="technical"} onClick={()=>chooseCategory("technical")} className={category==="technical"?"active":""}><ChartNoAxesCombined size={16}/> Técnicos <span>{families.filter(id=>CATALOG_ITEMS.some(i=>i.id===id&&i.kind==="technical")).length}</span></button>
+   <button role="tab" aria-selected={category==="situation"} onClick={()=>chooseCategory("situation")} className={category==="situation"?"active":""}><Waves size={16}/> Situaciones del mercado <span>{families.filter(id=>CATALOG_ITEMS.some(i=>i.id===id&&i.kind==="situation")).length}</span></button>
+   <button role="tab" aria-selected={category==="macro"} onClick={()=>chooseCategory("macro")} className={category==="macro"?"active":""}><Landmark size={16}/> Indicadores macroeconómicos <span>{macroIndicators.length}</span></button>
+  </div>
   <div className="tq-catalog-toolbar">
-   <div><div className="tq-catalog-overline">ESTRATEGIAS / MOTOR DE SEÑALES</div><h3>Elementos de búsqueda <span>{chosen.length}</span></h3>
-    <p>Combina indicadores cuantitativos con situaciones específicas del precio.</p></div>
-   <button className="tq-catalog-add" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><Plus size={17}/> Agregar indicador o situación <ChevronDown size={15}/></button>
+   <div><div className="tq-catalog-overline">{category==="macro"?"MACROECONOMÍA / VARIABLES EXTERNAS":"ESTRATEGIAS / GENERADOR DE SEÑALES"}</div>
+    <h3>{STATUS[category]} <span>{total} seleccionados</span></h3>
+    <p>{category==="macro"?"Datos macro y derivados agrupados por tema, con reglas preparadas para una futura integración de series históricas.":"Elige señales cuantitativas; los parámetros utilizados aparecen en una tabla editable."}</p></div>
+   <button className="tq-catalog-add" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><Plus size={16}/> Agregar {category==="macro"?"variable":category==="technical"?"indicador":"situación"} <ChevronDown size={15}/></button>
   </div>
   {open&&<div className="tq-catalog-picker">
-   <div className="tq-catalog-picker-top">
-    <div className="tq-catalog-category">
-     <button className={kind==="technical"?"active":""} onClick={()=>setKind("technical")}><ChartNoAxesCombined size={15}/> Indicadores técnicos</button>
-     <button className={kind==="situation"?"active":""} onClick={()=>setKind("situation")}><Waves size={15}/> Situaciones de mercado</button>
-    </div>
-    <button className="tq-picker-close" onClick={()=>setOpen(false)} aria-label="Cerrar catálogo"><X size={17}/></button>
+   <div className="tq-catalog-picker-top"><strong className="tq-picker-title">{category==="macro"?"Series e indicadores macroeconómicos":STATUS[category]}</strong><button className="tq-picker-close" onClick={()=>setOpen(false)} aria-label="Cerrar catálogo"><X size={17}/></button></div>
+   <label className="tq-catalog-search"><Search size={16}/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nombre, categoría o palabra clave..." aria-label="Buscar en catálogo"/></label>
+   <div className="tq-catalog-results tq-grouped-catalog">
+    {category==="macro"?(
+     macroFiltered.length?macroFiltered.map(group=>{
+      const opened=expanded.includes(group.id)||!!query.trim();
+      return <section key={group.id} className="tq-catalog-group">
+       <button className="tq-group-toggle" onClick={()=>toggleGroup(group.id)} aria-expanded={opened}><Landmark size={15}/><strong>{group.title}</strong><small>{group.series.length} series</small><ChevronDown className={opened?"rotated":""} size={15}/></button>
+       {opened&&<div className="tq-macro-grid">{group.series.map(item=><button key={item.id} disabled={macroIndicators.includes(item.id)} className="tq-macro-option" onClick={()=>addMacro(item)}>
+        <span>{item.name}</span><em>{item.frequency}</em><small>{macroIndicators.includes(item.id)?"Agregado":<Plus size={13}/>}</small>
+       </button>)}</div>}
+      </section>;
+     }):<p className="tq-catalog-empty">No hay coincidencias en las series macroeconómicas.</p>
+    ):(
+     CATALOG_GROUPS.filter(group=>filtered.some(i=>i.group===group.id)).map(group=><section key={group.id} className="tq-catalog-group">
+      <div className="tq-group-heading"><strong>{group.title}</strong><small>{filtered.filter(i=>i.group===group.id).length}</small></div>
+      {filtered.filter(i=>i.group===group.id).map(item=><button key={item.id} className="tq-catalog-result" disabled={!item.enabled||families.includes(item.id)} onClick={()=>addItem(item)}>
+       <span className="tq-catalog-result-symbol">{item.kind==="situation"?<Waves size={16}/>:<ChartNoAxesCombined size={16}/>}</span>
+       <span><strong>{item.name}</strong><small>{item.description}</small></span>
+       <em>{families.includes(item.id)?"Agregado":item.enabled?<Plus size={16}/>:"En desarrollo"}</em>
+      </button>)}
+     </section>)
+    )}
    </div>
-   <label className="tq-catalog-search"><Search size={16}/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nombre o situación..." aria-label="Buscar indicadores"/></label>
-   <div className="tq-catalog-results">
-    {filtered.length===0&&<p className="tq-catalog-empty">No se encontraron coincidencias.</p>}
-    {filtered.map(item=><button key={item.id} className="tq-catalog-result" disabled={!item.enabled||families.includes(item.id)} onClick={()=>add(item.id)}>
-     <span className="tq-catalog-result-symbol">{item.kind==="situation"?<Waves size={16}/>:<ChartNoAxesCombined size={16}/>}</span>
-     <span><strong>{item.name}</strong><small>{item.description}</small></span>
-     <em>{families.includes(item.id)?"Agregado":item.enabled?<Plus size={17}/>:"En desarrollo"}</em>
-    </button>)}
-   </div>
-   <label className="tq-catalog-show-future"><input type="checkbox" checked={showUnavailable} onChange={e=>setShowUnavailable(e.target.checked)}/> Mostrar indicadores en desarrollo</label>
+   {category!=="macro"&&<label className="tq-catalog-show-future"><input type="checkbox" checked={onlyAvailable} onChange={e=>setOnlyAvailable(e.target.checked)}/> Mostrar solo señales implementadas</label>}
+   {category==="macro"&&<div className="tq-catalog-macro-explainer"><Info size={15}/> Las series se agregan como reglas en preparación; no se descargan datos externos ni se generan señales macro todavía.</div>}
   </div>}
-  {chosen.length?<>
+  {category!=="macro"&&selectedItems.length>0&&<>
    <div className="tq-parameter-table-head"><span>Indicador / situación</span><span>Parámetro</span><span>Desde</span><span>Pasos</span><span>Hasta</span></div>
    <div className="tq-parameter-table">
-    {chosen.map(item=><div className="tq-parameter-group" key={item.id}>
-      <div className="tq-parameter-name"><button aria-label={"Quitar "+item.name} title="Quitar" onClick={()=>remove(item.id)}><X size={16}/></button><div><strong>{item.name}</strong><small>{item.kind==="situation"?"SITUACIÓN DE MERCADO":"INDICADOR TÉCNICO"}</small></div></div>
-      <div className="tq-parameter-fields">
-       {item.paramGroups.map(p=>{
-        const meta=PARAMS[p];const [min,step,max]=rangesFor(p);
-        return <div className="tq-parameter-line" key={p}>
-         <div className="tq-parameter-desc">{meta.name}{meta.unit&&<small>({meta.unit})</small>}</div>
-         <label><span>Desde</span><input aria-label={item.name+" "+meta.name+" desde"} type="number" min={meta.min} max={meta.max} step={1} value={min} onChange={e=>change(p,"min",e.target.value)}/></label>
-         <label><span>Pasos</span><input aria-label={item.name+" "+meta.name+" pasos"} type="number" min={1} max={30} step={1} value={step} onChange={e=>change(p,"step",e.target.value)}/></label>
-         <label><span>Hasta</span><input aria-label={item.name+" "+meta.name+" hasta"} type="number" min={meta.min} max={meta.max} step={1} value={max} onChange={e=>change(p,"max",e.target.value)}/></label>
-        </div>;
-       })}
-       {item.id==="rsi_reversion"&&<p className="tq-rsi-note">La sobrecompra es simétrica: 100 − sobreventa. Ej.: sobreventa 20–35 equivale a sobrecompra 80–65.</p>}
-       {item.kind==="situation"&&<p className="tq-sweep-note">Confirmación por cierre de vela; entrada en la apertura siguiente. Una señal por jornada de referencia.</p>}
-      </div>
+    {selectedItems.map(item=><div className="tq-parameter-group" key={item.id}>
+     <div className="tq-parameter-name"><button aria-label={"Eliminar "+item.name} onClick={()=>onFamilies(families.filter(x=>x!==item.id))}><X size={16}/></button><div><strong>{item.name}</strong><small>{item.kind==="situation"?"SITUACIÓN":"TÉCNICO"}</small></div></div>
+     <div className="tq-parameter-fields">
+      {item.paramGroups.map(prefix=>{
+       const meta=PARAMS[prefix];if(!meta)return null;
+       const values=rangesFor(prefix);
+       return <div className="tq-parameter-line" key={prefix}><div className="tq-parameter-desc">{meta.name} {meta.unit&&<small>({meta.unit})</small>}</div>
+        {(["min","step","max"] as const).map((field,index)=><label key={field}><span>{field==="min"?"Desde":field==="step"?"Pasos":"Hasta"}</span><input type="number" aria-label={item.name+" "+meta.name+" "+field} min={field==="step"?1:meta.min} max={field==="step"?30:meta.max} value={values[index]} onChange={e=>updateRange(prefix,field,e.target.value)}/></label>)}
+       </div>;
+      })}
+      {item.id==="rsi_reversion"&&<p className="tq-rsi-note">La sobrecompra se calcula como 100 − umbral de sobreventa.</p>}
+      {item.kind==="situation"&&<p className="tq-sweep-note">La barrida exige cierre de confirmación y entrada posterior. Una señal por jornada de referencia.</p>}
+     </div>
     </div>)}
    </div>
-  </>:<div className="tq-no-indicators"><SlidersHorizontal size={25}/><strong>No hay indicadores seleccionados</strong><p>Agrega al menos un indicador técnico o una situación de mercado para la búsqueda.</p><button onClick={()=>setOpen(true)}><Plus size={15}/> Agregar elemento</button></div>}
-  {anySituation&&<div className="tq-catalog-session-box">
-   <div className="tq-catalog-session-heading"><Clock3 size={17}/><div><strong>Horarios y zona de los datos</strong><p>Para identificar barridas sin anticipar niveles.</p></div></div>
-   <label>Zona horaria original del CSV <select value={sourceTimezone} onChange={e=>onTimezone(e.target.value)}>{ZONES.map(([v,name])=><option value={v} key={v}>{name}</option>)}</select></label>
-   <div className="tq-session-hours"><span><MapPin size={14}/> Londres: 08:00–16:00 (hora Londres)</span><span><MapPin size={14}/> Tokio: 09:00–17:00 (hora Tokio)</span></div>
-   <p>Se considera barrida cuando, después de cerrar la sesión, el precio supera el máximo/mínimo del rango y cierra nuevamente dentro. Solo se buscan señales desde el cierre de la sesión hasta la medianoche local. PDH/PDL utiliza el último día completo disponible. Requiere velas M1–H1 y la zona horaria correcta del archivo; el motor ajusta el horario de verano con zonas IANA.</p>
+  </>}
+  {category==="macro"&&selectedMacro.length>0&&<div className="tq-macro-selected">
+   <div className="tq-macro-selected-head"><span>Variable macroeconómica</span><span>Frecuencia</span><span>Regla (borrador)</span><span>Retardo mín. (días)</span></div>
+   {selectedMacro.map(item=>{const rule=macroRules[item.id]||newRule();return <div className="tq-macro-selected-row" key={item.id}>
+    <div className="tq-macro-selected-name"><button onClick={()=>removeMacro(item.id)} title="Quitar serie" aria-label={"Quitar "+item.name}><X size={16}/></button><strong>{item.name}</strong></div>
+    <small>{item.frequency}</small>
+    <select aria-label={"Regla "+item.name} value={rule.condition} onChange={e=>updateRule(item.id,{condition:e.target.value as MacroRule["condition"]})}>
+     <option value="rising">Sube vs dato anterior</option><option value="falling">Baja vs dato anterior</option>
+     <option value="above">Valor superior al umbral</option><option value="below">Valor inferior al umbral</option>
+    </select>
+    <input type="number" aria-label={"Retardo de publicación "+item.name} value={rule.min_release_lag_days} min={0} max={60} onChange={e=>updateRule(item.id,{min_release_lag_days:Math.min(60,Math.max(0,Number(e.target.value)||0))})}/>
+    {(rule.condition==="above"||rule.condition==="below")&&<div className="tq-macro-threshold"><label>Umbral <input aria-label={"Umbral "+item.name} type="number" step="any" value={rule.threshold} onChange={e=>updateRule(item.id,{threshold:Number(e.target.value)||0})}/></label></div>}
+   </div>})}
   </div>}
-  <div className="tq-catalog-stats"><span>Espacio de parámetros por familia (referencial):</span><strong>{new Intl.NumberFormat("en-US").format(size)}</strong></div>
-  {hasBad&&<div className="tq-indicator-error" role="alert">Revisa los rangos: mínimo ≤ máximo, paso positivo y EMA lenta al menos 8 periodos mayor que EMA rápida.</div>}
-  <div className="tq-catalog-science"><ShieldCheck size={17}/> <span>Las selecciones y los incrementos definidos se aplican al generador aleatorio y genético. Los indicadores que aparecen como «En desarrollo» no pueden ejecutarse hasta tener su motor científico.</span></div>
+  {total===0&&<div className="tq-no-indicators"><SlidersHorizontal size={25}/><strong>{category==="macro"?"No has agregado variables macroeconómicas":"Sin elementos de esta categoría"}</strong><p>{category==="macro"?"Elige las series que quieras estudiar y deja preparadas sus reglas históricas.":"Abre el catálogo para agregar una señal disponible."}</p><button onClick={()=>setOpen(true)}><Plus size={15}/> Agregar {category==="macro"?"variable":"señal"}</button></div>}
+  {hasSituation&&category==="situation"&&<div className="tq-catalog-session-box">
+   <div className="tq-catalog-session-heading"><Clock3 size={17}/><div><strong>Zona horaria del CSV</strong><p>Necesaria para interpretar Londres, Tokio y PDH/PDL sin anticipar niveles.</p></div></div>
+   <label>Zona de origen <select value={sourceTimezone} onChange={e=>onTimezone(e.target.value)}>{ZONES.map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>
+   <div className="tq-session-hours"><span><MapPin size={14}/> Londres 08:00–16:00 (local)</span><span><MapPin size={14}/> Tokio 09:00–17:00 (local)</span></div>
+   <p>Se consideran barridas después del cierre de la sesión: mecha supera el nivel y la vela cierra dentro. Solo M1–H1; la señal se evalúa con velas cerradas y entrada en la apertura siguiente.</p>
+  </div>}
+  {category==="macro"&&<div className="tq-macro-disclosure"><Info size={18}/><span><strong>Fuente histórica aún no conectada.</strong> Las reglas seleccionadas se guardan en esta sesión, pero no forman parte del backtest. Para ejecutarlas se necesitan series con fecha real de publicación, revisiones históricas y controles de disponibilidad (point-in-time). Los retardo(s) configurados no sustituyen esos datos.</span></div>}
+  {category!=="macro"&&<div className="tq-catalog-stats"><span>Espacio de parámetros de señales implementadas (referencial):</span><strong>{format(paramSpace)}</strong></div>}
+  {invalid&&<div className="tq-indicator-error" role="alert">Revisa límites y pasos de cada parámetro; el mínimo debe ser menor o igual que el máximo.</div>}
+  <div className="tq-catalog-science"><ShieldCheck size={17}/><span>Las señales marcadas como disponibles están implementadas en el motor científico. Las demás son referencias del catálogo, no resultados de backtesting. No se fabricarán datos macroeconómicos.</span></div>
  </div>;
 }
