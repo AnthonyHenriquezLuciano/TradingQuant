@@ -17,6 +17,7 @@ from engine import (
     FAMILIES, INTERVALS, resample, ema, atr_wilder, make_signals,
     simulate, summarize, bootstrap,
 )
+from market_setups import SITUATIONS, SOURCE_ZONES, sweep_reference, sweep_signals
 
 ORDER = list(INTERVALS)
 
@@ -68,77 +69,84 @@ def confirmed_higher_bias(source: pl.DataFrame, lower: pl.DataFrame, htf: str) -
 
 
 DEFAULT_RANGES = {
-    "ema_fast_min": 5, "ema_fast_max": 28,
-    "ema_slow_min": 29, "ema_slow_max": 90,
-    "rsi_period_min": 7, "rsi_period_max": 25,
-    "rsi_oversold_min": 20, "rsi_oversold_max": 40,
-    "breakout_lookback_min": 12, "breakout_lookback_max": 75,
+    "ema_fast_min": 5, "ema_fast_step": 1, "ema_fast_max": 28,
+    "ema_slow_min": 29, "ema_slow_step": 1, "ema_slow_max": 90,
+    "rsi_period_min": 7, "rsi_period_step": 1, "rsi_period_max": 25,
+    "rsi_oversold_min": 20, "rsi_oversold_step": 1, "rsi_oversold_max": 40,
+    "breakout_lookback_min": 12, "breakout_lookback_step": 1,
+    "breakout_lookback_max": 75,
+    "sweep_buffer_min": 0, "sweep_buffer_step": 1,
+    "sweep_buffer_max": 10,
 }
 
 
+def steps(r: dict[str,int], name: str) -> range:
+    return range(r[name+"_min"], r[name+"_max"]+1, r[name+"_step"])
+
+
 def checked_ranges(config: dict[str, Any]) -> dict[str, int]:
-    ranges = {**DEFAULT_RANGES, **(config.get("indicator_ranges") or {})}
-    limits = {
+    r = {**DEFAULT_RANGES, **(config.get("indicator_ranges") or {})}
+    bounds = {
         "ema_fast": (2, 100), "ema_slow": (10, 250),
         "rsi_period": (2, 60), "rsi_oversold": (5, 45),
-        "breakout_lookback": (5, 250),
+        "breakout_lookback": (5, 250), "sweep_buffer": (0, 30),
     }
-    for prefix, (minimum, maximum) in limits.items():
-        a, b = ranges[prefix + "_min"], ranges[prefix + "_max"]
-        if not isinstance(a, int) or isinstance(a, bool) or not isinstance(b, int) or isinstance(b, bool):
-            raise ValueError("Los parámetros de indicadores deben ser números enteros.")
-        if not (minimum <= a <= b <= maximum):
-            raise ValueError("Rango inválido para " + prefix + ".")
-    if ranges["ema_fast_min"] + 8 > ranges["ema_slow_max"]:
+    for name, (lower, upper) in bounds.items():
+        a, step, b = (r[name + "_" + s] for s in ("min", "step", "max"))
+        if any(not isinstance(v, int) or isinstance(v, bool) for v in (a, step, b)):
+            raise ValueError("Los parámetros deben ser enteros: " + name)
+        if not lower <= a <= b <= upper or not 1 <= step <= 30:
+            raise ValueError("Rango inválido para " + name)
+    if not any(fast+8<=slow for fast in steps(r,"ema_fast") for slow in steps(r,"ema_slow")):
         raise ValueError("Los rangos EMA no permiten una pareja rápida/lenta válida.")
-    return ranges
+    return r
 
 
-def random_gene(
-    rng: random.Random, families: list[int], ranges: dict[str, int] | None = None,
-) -> tuple[int, int, int]:
+def snap(r: dict[str,int], name: str, proposed: int, at_least: int | None = None) -> int:
+    valid = (x for x in steps(r,name) if at_least is None or x>=at_least)
+    return min(valid,key=lambda x:abs(x-proposed))
+
+
+def random_gene(rng: random.Random, families: list[int],
+                ranges: dict[str,int] | None = None) -> tuple[int,int,int]:
     r = ranges or DEFAULT_RANGES
     kind = rng.choice(families)
     if kind == 0:
-        lower = r["ema_fast_min"]
-        upper = min(r["ema_fast_max"], r["ema_slow_max"] - 8)
-        if lower > upper:
-            raise ValueError("No existe una combinación EMA válida.")
-        fast = rng.randint(lower, upper)
-        slow = rng.randint(max(r["ema_slow_min"], fast + 8), r["ema_slow_max"])
+        fasts = [f for f in steps(r,"ema_fast") if any(s>=f+8 for s in steps(r,"ema_slow"))]
+        fast = rng.choice(fasts)
+        slow = rng.choice([s for s in steps(r,"ema_slow") if s>=fast+8])
     elif kind == 1:
-        fast = rng.randint(r["rsi_period_min"], r["rsi_period_max"])
-        slow = rng.randint(r["rsi_oversold_min"], r["rsi_oversold_max"])
+        fast = rng.choice(steps(r,"rsi_period"))
+        slow = rng.choice(steps(r,"rsi_oversold"))
+    elif kind == 2:
+        fast, slow = 0, rng.choice(steps(r,"breakout_lookback"))
     else:
-        fast = 0
-        slow = rng.randint(r["breakout_lookback_min"], r["breakout_lookback_max"])
+        fast, slow = rng.choice(steps(r,"sweep_buffer")), 0
     return kind, fast, slow
 
 
-def mutate_or_cross(
-    rng: random.Random, a: tuple[int, int, int],
-    b: tuple[int, int, int], families: list[int],
-    ranges: dict[str, int] | None = None,
-) -> tuple[int, int, int]:
+def mutate_or_cross(rng: random.Random, a: tuple[int,int,int],
+                    b: tuple[int,int,int], families: list[int],
+                    ranges: dict[str,int] | None = None) -> tuple[int,int,int]:
     r = ranges or DEFAULT_RANGES
     if rng.random() < .13:
         return random_gene(rng, families, r)
-    kind = rng.choice((a[0], b[0]))
-    if kind == 0:
-        max_fast = min(r["ema_fast_max"], r["ema_slow_max"] - 8)
-        fast = max(r["ema_fast_min"], min(max_fast, rng.choice((a[1], b[1])) + rng.randint(-3, 3)))
-        slow = max(max(r["ema_slow_min"], fast + 8),
-                   min(r["ema_slow_max"], rng.choice((a[2], b[2])) + rng.randint(-7, 7)))
-    elif kind == 1:
-        fast = max(r["rsi_period_min"],
-                   min(r["rsi_period_max"], rng.choice((a[1], b[1])) + rng.randint(-3, 3)))
-        slow = max(r["rsi_oversold_min"],
-                   min(r["rsi_oversold_max"], rng.choice((a[2], b[2])) + rng.randint(-4, 4)))
-    else:
+    kind = rng.choice((a[0],b[0]))
+    if kind==0:
+        candidates = [f for f in steps(r,"ema_fast") if any(s>=f+8 for s in steps(r,"ema_slow"))]
+        target_fast = rng.choice((a[1],b[1]))+rng.randint(-3,3)
+        fast = min(candidates,key=lambda v:abs(v-target_fast))
+        slow = snap(r,"ema_slow",rng.choice((a[2],b[2]))+rng.randint(-7,7),fast+8)
+    elif kind==1:
+        fast = snap(r,"rsi_period",rng.choice((a[1],b[1]))+rng.randint(-3,3))
+        slow = snap(r,"rsi_oversold",rng.choice((a[2],b[2]))+rng.randint(-4,4))
+    elif kind==2:
         fast = 0
-        slow = max(r["breakout_lookback_min"],
-                   min(r["breakout_lookback_max"], rng.choice((a[2], b[2])) + rng.randint(-8, 8)))
-    return kind, fast, slow
+        slow = snap(r,"breakout_lookback",rng.choice((a[2],b[2]))+rng.randint(-8,8))
+    else:
+        fast = snap(r,"sweep_buffer",rng.choice((a[1],b[1]))+rng.randint(-2,2))
+        slow = 0
+    return kind,fast,slow
 
 
 def sharpe_of_daily_trades(outcomes: np.ndarray, days: np.ndarray) -> float:
@@ -197,6 +205,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     if cfg.get("initial_deposit", 5000) < 100:
         raise ValueError("El depósito inicial debe ser al menos USD 100.")
     ranges = checked_ranges(cfg)
+    source_timezone = cfg.get("source_timezone", "UTC")
+    if source_timezone not in SOURCE_ZONES:
+        raise ValueError("Zona horaria de los datos inválida.")
     families = [i for i,name in FAMILIES.items() if name in cfg["families"]]
     if not families:
         raise ValueError("Selecciona alguna familia de indicadores.")
@@ -235,6 +246,10 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         days = df["timestamp"].dt.date().cast(pl.Int32).to_numpy()
         atr = atr_wilder(hi,lo,close,14)
         higher_bias = confirmed_higher_bias(source,df,htf) if htf else None
+        references = {
+            k: sweep_reference(df,k,source_timezone,tf)
+            for k in families if k in SITUATIONS
+        }
         seen: set[tuple[int,int,int,int]] = set()
         evaluated: list[dict] = []
 
@@ -244,7 +259,12 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 return None
             seen.add(key)
             kind,fast,slow = gene
-            signals = make_signals(kind,fast,slow,close,hi,lo)
+            if kind in SITUATIONS:
+                level, session_days, valid = references[kind]
+                signals = sweep_signals(hi,lo,close,level,session_days,valid,
+                                        SITUATIONS[kind][4],fast)
+            else:
+                signals = make_signals(kind,fast,slow,close,hi,lo)
             if higher_bias is not None:
                 signals = np.where(signals == higher_bias,signals,0).astype(np.int8)
             r_is,d_is = simulate(
@@ -345,7 +365,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         if mc["p95_drawdown_pct"] is not None and mc["p95_drawdown_pct"]>=cfg["prop_max_pct"]:
             reasons.append("Drawdown Monte Carlo P95 supera el límite")
         params = ({"fast":fast,"slow":slow} if kind==0 else
-                  {"rsi_period":fast,"oversold":slow} if kind==1 else {"lookback":slow})
+                  {"rsi_period":fast,"oversold":slow} if kind==1 else
+                  {"lookback":slow} if kind==2 else
+                  {"sweep_buffer_bps":fast})
         candidates.append(dict(
             id="candidate-"+str(i+1),family=FAMILIES[kind],params=params,
             timeframe=trial["timeframe"],context_timeframe=trial["context"],
@@ -359,6 +381,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         "Comisiones, spread variable, swaps, slippage y ejecución tick a tick no están modelados.",
         "El capital inicial y sizing afectan el balance estimado, no generan cotizaciones reales.",
         "El multi-TF combinado aplica únicamente una tendencia HTF EMA20/50 con barras completas.",
+        "Barridas: Londres 08:00–16:00 (Europe/London), Tokio 09:00–17:00 (Asia/Tokyo); después del cierre de la sesión y hasta medianoche local. Confirma la zona horaria de origen del CSV.",
         "Monte Carlo remuestrea operaciones OOS; no simula caminos de mercado.",
     ]
     return dict(
