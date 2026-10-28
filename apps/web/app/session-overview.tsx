@@ -22,12 +22,11 @@ export type AlgoSession<TConfig> = {
 
 type Props<TConfig> = {
   sessions: AlgoSession<TConfig>[];
-  onCreate: (name: string, symbol: string) => void;
+  onCreate: (name: string) => void;
   onOpen: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
 };
 
-const INSTRUMENTS = ["XAUUSD", "NAS100", "USDJPY", "USDCAD", "EURUSD", "GBPUSD", "BTCUSD", "OTRO"];
 const format = (d: string) => {
   const dt = new Date(d);
   return Number.isNaN(dt.getTime())
@@ -43,7 +42,6 @@ export function SessionOverview<TConfig>({sessions,onCreate,onOpen,onDelete}: Pr
   const [deleting,setDeleting] = useState<string | null>(null);
   const [help,setHelp] = useState(false);
   const [name,setName] = useState("");
-  const [symbol,setSymbol] = useState("XAUUSD");
   const [hydrated,setHydrated] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
@@ -74,11 +72,11 @@ export function SessionOverview<TConfig>({sessions,onCreate,onOpen,onDelete}: Pr
   const visible = sessions.filter(s => (s.name + " " + s.symbol).toLowerCase().includes(search.toLowerCase().trim()))
     .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const toDelete = sessions.find(s => s.id === deleting);
-  const begin = () => {setName("");setSymbol("XAUUSD");setMenu(null);setCreating(true)};
+  const begin = () => {setName("");setMenu(null);setCreating(true)};
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onCreate(name.trim(),symbol);
+    onCreate(name.trim());
     setCreating(false);
     setSearch("");
   };
@@ -165,7 +163,6 @@ export function SessionOverview<TConfig>({sessions,onCreate,onOpen,onDelete}: Pr
         <p>Organiza una hipótesis de trading bajo su propio espacio de trabajo.</p>
         <form onSubmit={submit}>
           <label>Nombre de la sesión<input ref={nameRef} maxLength={80} required value={name} onChange={e=>setName(e.target.value)} placeholder="Ej. Nasdaq100 · Rupturas de Londres"/></label>
-          <label>Instrumento de referencia<select value={symbol} onChange={e=>setSymbol(e.target.value)}>{INSTRUMENTS.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
           <div className="session-modal-actions"><button type="button" className="btn session-cancel" onClick={()=>setCreating(false)}>Cancelar</button><button type="submit" className="btn sessions-create-button" disabled={!name.trim()}><Plus size={17}/> Crear sesión</button></div>
         </form>
       </div>
