@@ -50,7 +50,7 @@ export function IndicatorCatalog({
  const [open,setOpen]=useState(false);
  const [query,setQuery]=useState("");
  const [onlyAvailable,setOnlyAvailable]=useState(false);
- const [expanded,setExpanded]=useState<string[]>([]);
+ const [collapsed,setCollapsed]=useState<string[]>([]);
  const selectedItems=CATALOG_ITEMS.filter(item=>item.kind===category&&families.includes(item.id)&&item.enabled);
  const selectedMacro=MACRO_SERIES.filter(item=>macroIndicators.includes(item.id));
  const total=category==="macro"?selectedMacro.length:selectedItems.length;
@@ -67,13 +67,13 @@ export function IndicatorCatalog({
  const paramSpace=CATALOG_ITEMS.filter(i=>i.enabled&&families.includes(i.id)).reduce((sum,i)=>
   sum+i.paramGroups.reduce((product,p)=>{const [from,step,to]=rangesFor(p);return product*Math.max(0,Math.floor((to-from)/Math.max(1,step))+1)},1),0);
  const invalid=Object.entries(PARAMS).some(([name,meta])=>{const [from,step,to]=rangesFor(name);return !Number.isInteger(from)||!Number.isInteger(step)||!Number.isInteger(to)||from>to||from<meta.min||to>meta.max||step<1||step>30});
- function chooseCategory(next:CatalogKind){setCategory(next);setOpen(false);setQuery("");setExpanded([])}
+ function chooseCategory(next:CatalogKind){setCategory(next);setOpen(false);setQuery("");setCollapsed([])}
  function addItem(item:CatalogItem){if(!item.enabled||families.includes(item.id))return;onFamilies([...families,item.id]);setOpen(false);setQuery("")}
- function addMacro(item:MacroSeries){if(macroIndicators.includes(item.id))return;onMacroIndicators([...macroIndicators,item.id]);onMacroRules({...macroRules,[item.id]:newRule()});setOpen(false);setQuery("")}
+ function addMacro(item:MacroSeries){if(macroIndicators.includes(item.id))return;onMacroIndicators([...macroIndicators,item.id]);onMacroRules({...macroRules,[item.id]:newRule()})}
  function removeMacro(id:string){onMacroIndicators(macroIndicators.filter(i=>i!==id));const next={...macroRules};delete next[id];onMacroRules(next)}
  function updateRule(id:string,patch:Partial<MacroRule>){onMacroRules({...macroRules,[id]:{...(macroRules[id]||newRule()),...patch}})}
  function updateRange(name:string,key:"min"|"step"|"max",raw:string){const value=Number(raw);if(!Number.isFinite(value))return;onRanges({...ranges,[name+"_"+key]:Math.trunc(value)})}
- function toggleGroup(id:string){setExpanded(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])}
+ function toggleGroup(id:string){setCollapsed(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])}
  return <div className="tq-catalog">
   <div className="tq-library-categories" role="tablist" aria-label="Tipos de indicadores">
    <button role="tab" aria-selected={category==="technical"} onClick={()=>chooseCategory("technical")} className={category==="technical"?"active":""}><ChartNoAxesCombined size={16}/> Técnicos <span>{families.filter(id=>CATALOG_ITEMS.some(i=>i.id===id&&i.kind==="technical")).length}</span></button>
@@ -84,19 +84,19 @@ export function IndicatorCatalog({
    <div><div className="tq-catalog-overline">{category==="macro"?"MACROECONOMÍA / VARIABLES EXTERNAS":"ESTRATEGIAS / GENERADOR DE SEÑALES"}</div>
     <h3>{STATUS[category]} <span>{total} seleccionados</span></h3>
     <p>{category==="macro"?"Datos macro y derivados agrupados por tema, con reglas preparadas para una futura integración de series históricas.":"Elige señales cuantitativas; los parámetros utilizados aparecen en una tabla editable."}</p></div>
-   <button className="tq-catalog-add" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><Plus size={16}/> Agregar {category==="macro"?"variable":category==="technical"?"indicador":"situación"} <ChevronDown size={15}/></button>
+   {category==="macro"?<span className="tq-macro-availability"><Landmark size={15}/> {MACRO_SERIES.length} series disponibles para configurar</span>:<button className="tq-catalog-add" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><Plus size={16}/> Agregar {category==="technical"?"indicador":"situación"} <ChevronDown size={15}/></button>}
   </div>
-  {open&&<div className="tq-catalog-picker">
-   <div className="tq-catalog-picker-top"><strong className="tq-picker-title">{category==="macro"?"Series e indicadores macroeconómicos":STATUS[category]}</strong><button className="tq-picker-close" onClick={()=>setOpen(false)} aria-label="Cerrar catálogo"><X size={17}/></button></div>
-   <label className="tq-catalog-search"><Search size={16}/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nombre, categoría o palabra clave..." aria-label="Buscar en catálogo"/></label>
+  {(open||category==="macro")&&<div className={"tq-catalog-picker "+(category==="macro"?"tq-macro-browser":"")}>
+   <div className="tq-catalog-picker-top"><strong className="tq-picker-title">{category==="macro"?"Explorar las 11 categorías macroeconómicas":STATUS[category]}</strong>{category!=="macro"&&<button className="tq-picker-close" onClick={()=>setOpen(false)} aria-label="Cerrar catálogo"><X size={17}/></button>}</div>
+   <label className="tq-catalog-search"><Search size={16}/><input autoFocus={category!=="macro"} value={query} onChange={e=>setQuery(e.target.value)} placeholder={category==="macro"?"Buscar VIX, CPI, NFP, Treasury, DXY...":"Buscar por nombre, categoría o palabra clave..."} aria-label="Buscar en catálogo"/>{query&&<button type="button" className="tq-search-clear" onClick={()=>setQuery("")} aria-label="Limpiar búsqueda"><X size={15}/></button>}</label>
    <div className="tq-catalog-results tq-grouped-catalog">
     {category==="macro"?(
      macroFiltered.length?macroFiltered.map(group=>{
-      const opened=expanded.includes(group.id)||!!query.trim();
+      const opened=!collapsed.includes(group.id)||!!query.trim();
       return <section key={group.id} className="tq-catalog-group">
        <button className="tq-group-toggle" onClick={()=>toggleGroup(group.id)} aria-expanded={opened}><Landmark size={15}/><strong>{group.title}</strong><small>{group.series.length} series</small><ChevronDown className={opened?"rotated":""} size={15}/></button>
        {opened&&<div className="tq-macro-grid">{group.series.map(item=><button key={item.id} disabled={macroIndicators.includes(item.id)} className="tq-macro-option" onClick={()=>addMacro(item)}>
-        <span>{item.name}</span><em>{item.frequency}</em><small>{macroIndicators.includes(item.id)?"Agregado":<Plus size={13}/>}</small>
+        <span>{item.name}</span><em title={item.frequency==="D"?"Diaria":item.frequency==="W"?"Semanal":item.frequency==="M"?"Mensual":"Trimestral"}>{item.frequency}</em><small>{macroIndicators.includes(item.id)?<Check size={13}/>:<Plus size={13}/>}</small>
        </button>)}</div>}
       </section>;
      }):<p className="tq-catalog-empty">No hay coincidencias en las series macroeconómicas.</p>
@@ -112,7 +112,7 @@ export function IndicatorCatalog({
     )}
    </div>
    {category!=="macro"&&<label className="tq-catalog-show-future"><input type="checkbox" checked={onlyAvailable} onChange={e=>setOnlyAvailable(e.target.checked)}/> Mostrar solo señales implementadas</label>}
-   {category==="macro"&&<div className="tq-catalog-macro-explainer"><Info size={15}/> Las series se agregan como reglas en preparación; no se descargan datos externos ni se generan señales macro todavía.</div>}
+   {category==="macro"&&<div className="tq-catalog-macro-explainer"><Info size={15}/> Selecciona cualquier variable para añadirla a «Reglas seleccionadas» debajo del catálogo. D = diaria, W = semanal, M = mensual y Q = trimestral. No se descargan datos históricos todavía.</div>}
   </div>}
   {category!=="macro"&&selectedItems.length>0&&<>
    <div className="tq-parameter-table-head"><span>Indicador / situación</span><span>Parámetro</span><span>Desde</span><span>Pasos</span><span>Hasta</span></div>
@@ -133,7 +133,7 @@ export function IndicatorCatalog({
     </div>)}
    </div>
   </>}
-  {category==="macro"&&selectedMacro.length>0&&<div className="tq-macro-selected">
+  {category==="macro"&&selectedMacro.length>0&&<div className="tq-macro-selected"><div className="tq-macro-rules-heading"><strong>Reglas macro seleccionadas</strong><span>{selectedMacro.length} {selectedMacro.length===1?"variable":"variables"} · pendientes de conexión de datos</span></div>
    <div className="tq-macro-selected-head"><span>Variable macroeconómica</span><span>Frecuencia</span><span>Regla (borrador)</span><span>Retardo mín. (días)</span></div>
    {selectedMacro.map(item=>{const rule=macroRules[item.id]||newRule();return <div className="tq-macro-selected-row" key={item.id}>
     <div className="tq-macro-selected-name"><button onClick={()=>removeMacro(item.id)} title="Quitar serie" aria-label={"Quitar "+item.name}><X size={16}/></button><strong>{item.name}</strong></div>
