@@ -142,3 +142,25 @@ def test_invalid_indicator_ranges_rejected():
     from engine_advanced import checked_ranges
     with pytest.raises(ValueError, match="Rango inválido"):
         checked_ranges({"indicator_ranges": {"rsi_period_min": 25, "rsi_period_max": 12}})
+
+
+def test_market_situation_ranges_are_independent():
+    import random
+    from engine_advanced import checked_ranges, random_gene, mutate_or_cross
+    ranges = checked_ranges({"indicator_ranges": {
+        "london_high_sweep_buffer_min": 2,
+        "london_high_sweep_buffer_step": 2,
+        "london_high_sweep_buffer_max": 6,
+        "asia_low_sweep_buffer_min": 9,
+        "asia_low_sweep_buffer_step": 3,
+        "asia_low_sweep_buffer_max": 15,
+    }})
+    rng = random.Random(17)
+    for kind, allowed in ((3, {2,4,6}),(6, {9,12,15})):
+        for _ in range(30):
+            a = random_gene(rng,[kind],ranges)
+            b = random_gene(rng,[kind],ranges)
+            c = mutate_or_cross(rng,a,b,[kind],ranges)
+            assert a[1] in allowed
+            assert b[1] in allowed
+            assert c[1] in allowed
