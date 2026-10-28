@@ -564,3 +564,59 @@ html,body{background:#090909;color:#f1eee8}
 .tq-catalog-science>svg{flex-shrink:0;color:#d9b981}
 @media(max-width:900px){.tq-parameter-table-head{grid-template-columns:24% 1fr 52px 52px 52px;gap:6px}.tq-parameter-group{grid-template-columns:24% minmax(0,1fr);gap:6px}.tq-parameter-line{grid-template-columns:minmax(0,1fr) 52px 52px 52px;gap:6px}}
 @media(max-width:590px){.tq-catalog{padding:16px 13px}.tq-catalog-toolbar{align-items:stretch;flex-direction:column}.tq-catalog-add{width:100%}.tq-parameter-table-head{display:none}.tq-parameter-group{display:block;padding:16px 12px}.tq-parameter-name{margin-bottom:14px}.tq-parameter-fields{gap:11px}.tq-parameter-line{grid-template-columns:minmax(0,1fr) 56px 56px 56px;gap:4px}.tq-parameter-line input{font-size:10px}.tq-parameter-desc{font-size:9px;line-height:1.45}.tq-parameter-line label>span{display:block;text-align:center;color:#8d7b5f;font-size:8px;margin-bottom:6px}.tq-catalog-category button{padding:8px;font-size:9px}.tq-catalog-session-box>label{display:block}.tq-catalog-session-box select{display:block;margin-top:8px;width:100%}.tq-catalog-stats{flex-wrap:wrap}}
+
+/* ─── TradingQuant: 3-category research indicator library ─── */
+.tq-library-categories{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:24px;border-bottom:1px solid #3b3127;padding-bottom:15px}
+.tq-library-categories button{display:inline-flex;align-items:center;gap:9px;min-height:41px;border:1px solid #3b342a;border-radius:8px;background:#141310;color:#b1a594;font-size:11px;font-weight:750;padding:0 13px;transition:background .18s,border-color .18s}
+.tq-library-categories button:hover{border-color:#8c724b;background:#231d17}
+.tq-library-categories button.active{background:linear-gradient(135deg,#42321f,#231c13);border-color:#ac8c55;color:#f0dab1}
+.tq-library-categories button.active svg{color:#dcb975}
+.tq-library-categories button>span{color:#d0b47c;background:#33291b;border:1px solid #58472e;border-radius:5px;padding:2px 7px;font-size:9px}
+.tq-picker-title{color:#e6d4b5;font-size:12px}
+.tq-grouped-catalog{max-height:350px;padding-right:4px}
+.tq-catalog-group{border:1px solid #3a3127;border-radius:7px;background:#141210;margin:5px 0 10px;overflow:hidden}
+.tq-group-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;background:#241d15;border-bottom:1px solid #483b2a;padding:9px 12px;font-size:10px;color:#d7bc8c;font-weight:750}
+.tq-group-heading small{color:#958472}
+.tq-group-toggle{display:flex;align-items:center;gap:9px;width:100%;border:none;background:#241d15;color:#dec392;padding:12px;text-align:left}
+.tq-group-toggle:hover{background:#302519}
+.tq-group-toggle strong{flex:1;font-size:11px}
+.tq-group-toggle small{color:#b09a7b;font-size:9px}
+.tq-group-toggle svg.rotated{transform:rotate(180deg)}
+.tq-macro-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:11px}
+.tq-macro-option{display:flex;align-items:center;gap:7px;min-width:0;min-height:36px;border:1px solid #3c342a;background:#181613;color:#d1c1aa;border-radius:7px;text-align:left;padding:7px 8px;font-size:10px}
+.tq-macro-option:not(:disabled):hover{border-color:#9b7d4d;background:#302518}
+.tq-macro-option:disabled{opacity:.55;cursor:not-allowed}
+.tq-macro-option>span{flex:1;min-width:0;line-height:1.4}
+.tq-macro-option>em{font-style:normal;font-size:8px;color:#9e8a6c}
+.tq-macro-option>small{font-size:8px;background:#292e20;color:#a8cf93;border-radius:4px;padding:3px;min-width:18px;display:grid;place-items:center}
+.tq-catalog-macro-explainer{display:flex;align-items:start;gap:8px;margin:11px 3px 0;color:#b4a58f;font-size:10px;line-height:1.7}
+.tq-catalog-macro-explainer svg{flex-shrink:0;color:#c6aa79}
+.tq-macro-selected{border:1px solid #3f362d;border-radius:9px;overflow:hidden;background:#13110f}
+.tq-macro-selected-head{display:grid;grid-template-columns:minmax(0,1.3fr) 62px minmax(130px,1.1fr) 100px;gap:12px;align-items:center;padding:14px 17px;background:#292117;border-bottom:1px solid #4e3e29;color:#dbc196;font-size:10px;font-weight:750}
+.tq-macro-selected-row{display:grid;grid-template-columns:minmax(0,1.3fr) 62px minmax(130px,1.1fr) 100px;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid #342d24}
+.tq-macro-selected-row:last-child{border-bottom:none}
+.tq-macro-selected-name{display:flex;gap:9px;align-items:center;min-width:0}
+.tq-macro-selected-name>button{display:grid;place-items:center;padding:3px;background:none;border:none;color:#a49079}
+.tq-macro-selected-name>button:hover{color:#ec9e8c}
+.tq-macro-selected-name>strong{font-size:11px;color:#dfc38e;line-height:1.45}
+.tq-macro-selected-row>small{font-size:9px;color:#b8a080}
+.tq-macro-selected-row select,.tq-macro-selected-row>input,.tq-macro-threshold input{height:36px;width:100%;min-width:0;border-radius:6px;border:1px solid #53432e;background:#171410;color:#e8d8bd;padding:0 9px;font-size:10px;color-scheme:dark}
+.tq-macro-threshold{grid-column:3/5}
+.tq-macro-threshold label{display:flex;align-items:center;justify-content:end;gap:10px;color:#bfa981;font-size:10px}
+.tq-macro-threshold input{max-width:122px}
+.tq-macro-disclosure{display:flex;align-items:start;gap:12px;border:1px solid #75613b;background:linear-gradient(100deg,#302515,#171411);color:#c8b69a;border-radius:8px;padding:16px;margin-top:20px;font-size:10px;line-height:1.8}
+.tq-macro-disclosure svg{color:#d7b67a;flex-shrink:0}
+.tq-macro-disclosure strong{color:#e8cd9e}
+@media(max-width:700px){
+ .tq-library-categories{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .tq-library-categories button{justify-content:center;font-size:10px;padding:8px 9px}
+ .tq-library-categories button:last-child{grid-column:1/-1}
+ .tq-macro-grid{grid-template-columns:1fr}
+ .tq-macro-selected-head{display:none}
+ .tq-macro-selected-row{grid-template-columns:1fr 1fr;padding:14px;gap:9px}
+ .tq-macro-selected-name{grid-column:1/-1}
+ .tq-macro-selected-row>small{align-self:center}
+ .tq-macro-selected-row select{grid-column:1/-1}
+ .tq-macro-selected-row>input{max-width:100px}
+ .tq-macro-threshold{grid-column:1/-1}
+}
