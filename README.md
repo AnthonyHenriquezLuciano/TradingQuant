@@ -36,7 +36,7 @@ Archivos OHLC con cabeceras `timestamp,open,high,low,close[,volume]` o `date,tim
 
 ## Investigación
 1. Importa CSV al panel **Datos históricos**.
-2. Entra a **Creador de Algoritmos**, crea una sesión y abre el configurador de 6 apartados: Configuración, Modelado, Dirección, Sizing, Multi-TF y Combinaciones.
+2. Entra a **Creador de Algoritmos**, crea una sesión y abre las dos pestañas **Configuración** (símbolo, intervalos, fechas, depósito, tipo, modelado, dirección, sizing, Multi-TF, combinaciones, datos y parámetros científicos avanzados) e **Indicadores** (familias EMA/RSI/Breakout y sus rangos configurables).
 3. Configura una exploración aleatoria o una evolución genética con crossover, mutación y selección por Sharpe IS, y ejecuta la búsqueda.
 4. Consulta métricas IS/OOS y bootstrap de Monte Carlo exploratorio. Los resultados pasan validaciones mínimas; no son garantías de rentabilidad.
 
@@ -45,6 +45,7 @@ Archivos OHLC con cabeceras `timestamp,open,high,low,close[,volume]` o `date,tim
 - **Genético:** población con crossover, mutación, elitismo y Sharpe estimado desde retornos R en días con operaciones. No es Sharpe mark-to-market ni garantiza que la curva OOS sea robusta.
 - **Multi-TF:** el filtro EMA20/50 del contexto HTF sólo está disponible tras cerrar completamente la vela superior. Se estudia individualmente cada TF o un par menor/mayor, no todas las permutaciones de 3+ temporalidades.
 - **OHLC M1 y tick real:** visibles pero deshabilitados hasta disponer de una fuente autorizada y replay de alta resolución. No hay descarga automática de ticks; la cantidad de datos dependerá del proveedor.
+- **Rangos de indicadores implementados:** EMA rápida/lenta, RSI período/sobreventa, Breakout lookback. Sus límites se respetan en la generación aleatoria y genética. Otros indicadores están pendientes de implementar.
 - **Pendientes:** jobs en segundo plano, walk-forward rodante, trading en vivo, conectores M1/tick y costes dinámicos del bróker.
 - **Producción Vercel:** el frontend está conectado a GitHub y desplegado, pero FastAPI aún no está publicado y los datos/resultados no están sincronizados mediante Supabase.
 - Las métricas de monte carlo son remuestreo de trades OOS, **no** una simulación completa de mercados alternativos.
