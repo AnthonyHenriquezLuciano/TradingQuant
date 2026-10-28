@@ -163,6 +163,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         raise ValueError("El presupuesto debe permitir al menos una evaluación por intervalo.")
     rng = random.Random(20261028)
     direction = {"both":0,"long":1,"short":-1}[cfg["direction"]]
+    directions = [1,-1] if direction == 0 else [direction]
     sampling_model = 0 if modeling == "open" else 1
     per = [budget//len(jobs) + (i<budget%len(jobs)) for i in range(len(jobs))]
     all_trials: list[dict] = []
@@ -180,20 +181,21 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         days = df["timestamp"].dt.date().cast(pl.Int32).to_numpy()
         atr = atr_wilder(hi,lo,close,14)
         higher_bias = confirmed_higher_bias(source,df,htf) if htf else None
-        seen: set[tuple[int,int,int]] = set()
+        seen: set[tuple[int,int,int,int]] = set()
         evaluated: list[dict] = []
 
-        def assess(gene: tuple[int,int,int]) -> dict | None:
-            if gene in seen:
+        def assess(gene: tuple[int,int,int], side: int) -> dict | None:
+            key = (*gene, side)
+            if key in seen:
                 return None
-            seen.add(gene)
+            seen.add(key)
             kind,fast,slow = gene
             signals = make_signals(kind,fast,slow,close,hi,lo)
             if higher_bias is not None:
                 signals = np.where(signals == higher_bias,signals,0).astype(np.int8)
             r_is,d_is = simulate(
                 signals,op,hi,lo,close,atr,days,0,cut,
-                cfg["rr"],cfg["atr_multiplier"],cfg["cost_bps"],direction,sampling_model,
+                cfg["rr"],cfg["atr_multiplier"],cfg["cost_bps"],side,sampling_model,
             )
             metrics_is = summarize(
                 r_is,d_is,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -203,7 +205,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             if metrics_is["trades"] < max(4,cfg["min_trades"]):
                 score -= 100.
             return dict(
-                gene=gene,score=float(score),signals=signals,in_sample=metrics_is,
+                gene=gene,side=side,score=float(score),signals=signals,in_sample=metrics_is,
                 dataframe=(op,hi,lo,close,atr,days,cut,n),
                 timeframe=tf,context=htf,model=job_type,
             )
@@ -212,9 +214,13 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             attempts = 0
             while len(evaluated) < max_eval and attempts < max_eval*25:
                 attempts += 1
-                trial = assess(random_gene(rng,families))
-                if trial is not None:
-                    evaluated.append(trial)
+                gene = random_gene(rng,families)
+                for side in directions:
+                    if len(evaluated) >= max_eval:
+                        break
+                    trial = assess(gene,side)
+                    if trial is not None:
+                        evaluated.append(trial)
         else:
             generations = max(2,min(30,int(cfg.get("generations",8))))
             pop_size = max(2, min(24,max_eval//generations))
@@ -233,19 +239,26 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                         mother = rng.choice(elite)["gene"]
                         father = rng.choice(elite)["gene"]
                         gene = mutate_or_cross(rng,mother,father,families)
-                    trial = assess(gene)
-                    if trial is not None:
-                        new_gen.append(trial)
-                        evaluated.append(trial)
+                    for side in directions:
+                        if len(new_gen) >= target:
+                            break
+                        trial = assess(gene,side)
+                        if trial is not None:
+                            new_gen.append(trial)
+                            evaluated.append(trial)
                 if not new_gen:
                     break
                 # Elitism is based ONLY on in-sample scores.
                 population = sorted(population+new_gen,key=lambda t:t["score"],reverse=True)[:pop_size]
             while len(evaluated)<max_eval and attempts<max_eval*50:
                 attempts += 1
-                trial = assess(random_gene(rng,families))
-                if trial is not None:
-                    evaluated.append(trial)
+                gene = random_gene(rng,families)
+                for side in directions:
+                    if len(evaluated) >= max_eval:
+                        break
+                    trial = assess(gene,side)
+                    if trial is not None:
+                        evaluated.append(trial)
         all_trials.extend(evaluated)
 
     # Only training metrics determine the shortlist; never rank by OOS.
@@ -257,7 +270,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         op,hi,lo,cl,atr,days,cut,n = trial["dataframe"]
         r_oos,d_oos = simulate(
             trial["signals"],op,hi,lo,cl,atr,days,cut,n,
-            cfg["rr"],cfg["atr_multiplier"],cfg["cost_bps"],direction,sampling_model,
+            cfg["rr"],cfg["atr_multiplier"],cfg["cost_bps"],trial["side"],sampling_model,
         )
         metrics_oos = summarize(
             r_oos,d_oos,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -282,6 +295,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         candidates.append(dict(
             id="candidate-"+str(i+1),family=FAMILIES[kind],params=params,
             timeframe=trial["timeframe"],context_timeframe=trial["context"],
+            direction="long" if trial["side"] == 1 else "short",
             model=trial["model"],in_sample=trial["in_sample"],
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
