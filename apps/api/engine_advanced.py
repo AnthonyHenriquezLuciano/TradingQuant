@@ -75,8 +75,18 @@ DEFAULT_RANGES = {
     "rsi_oversold_min": 20, "rsi_oversold_step": 1, "rsi_oversold_max": 40,
     "breakout_lookback_min": 12, "breakout_lookback_step": 1,
     "breakout_lookback_max": 75,
-    "sweep_buffer_min": 0, "sweep_buffer_step": 1,
-    "sweep_buffer_max": 10,
+    "london_high_sweep_buffer_min": 0, "london_high_sweep_buffer_step": 1,
+    "london_high_sweep_buffer_max": 10,
+    "london_low_sweep_buffer_min": 0, "london_low_sweep_buffer_step": 1,
+    "london_low_sweep_buffer_max": 10,
+    "asia_high_sweep_buffer_min": 0, "asia_high_sweep_buffer_step": 1,
+    "asia_high_sweep_buffer_max": 10,
+    "asia_low_sweep_buffer_min": 0, "asia_low_sweep_buffer_step": 1,
+    "asia_low_sweep_buffer_max": 10,
+    "previous_day_high_sweep_buffer_min": 0, "previous_day_high_sweep_buffer_step": 1,
+    "previous_day_high_sweep_buffer_max": 10,
+    "previous_day_low_sweep_buffer_min": 0, "previous_day_low_sweep_buffer_step": 1,
+    "previous_day_low_sweep_buffer_max": 10,
 }
 
 
@@ -89,7 +99,13 @@ def checked_ranges(config: dict[str, Any]) -> dict[str, int]:
     bounds = {
         "ema_fast": (2, 100), "ema_slow": (10, 250),
         "rsi_period": (2, 60), "rsi_oversold": (5, 45),
-        "breakout_lookback": (5, 250), "sweep_buffer": (0, 30),
+        "breakout_lookback": (5, 250),
+        "london_high_sweep_buffer": (0, 30),
+        "london_low_sweep_buffer": (0, 30),
+        "asia_high_sweep_buffer": (0, 30),
+        "asia_low_sweep_buffer": (0, 30),
+        "previous_day_high_sweep_buffer": (0, 30),
+        "previous_day_low_sweep_buffer": (0, 30),
     }
     for name, (lower, upper) in bounds.items():
         a, step, b = (r[name + "_" + s] for s in ("min", "step", "max"))
@@ -121,7 +137,7 @@ def random_gene(rng: random.Random, families: list[int],
     elif kind == 2:
         fast, slow = 0, rng.choice(steps(r,"breakout_lookback"))
     else:
-        fast, slow = rng.choice(steps(r,"sweep_buffer")), 0
+        fast, slow = rng.choice(steps(r,FAMILIES[kind]+"_buffer")), 0
     return kind, fast, slow
 
 
@@ -144,7 +160,7 @@ def mutate_or_cross(rng: random.Random, a: tuple[int,int,int],
         fast = 0
         slow = snap(r,"breakout_lookback",rng.choice((a[2],b[2]))+rng.randint(-8,8))
     else:
-        fast = snap(r,"sweep_buffer",rng.choice((a[1],b[1]))+rng.randint(-2,2))
+        fast = snap(r,FAMILIES[kind]+"_buffer",rng.choice((a[1],b[1]))+rng.randint(-2,2))
         slow = 0
     return kind,fast,slow
 
