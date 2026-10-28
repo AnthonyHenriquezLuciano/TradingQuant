@@ -14,7 +14,12 @@ export type IndicatorRanges = {
  rsi_period_min:number;rsi_period_step:number;rsi_period_max:number;
  rsi_oversold_min:number;rsi_oversold_step:number;rsi_oversold_max:number;
  breakout_lookback_min:number;breakout_lookback_step:number;breakout_lookback_max:number;
- sweep_buffer_min:number;sweep_buffer_step:number;sweep_buffer_max:number;
+ london_high_sweep_buffer_min:number;london_high_sweep_buffer_step:number;london_high_sweep_buffer_max:number;
+ london_low_sweep_buffer_min:number;london_low_sweep_buffer_step:number;london_low_sweep_buffer_max:number;
+ asia_high_sweep_buffer_min:number;asia_high_sweep_buffer_step:number;asia_high_sweep_buffer_max:number;
+ asia_low_sweep_buffer_min:number;asia_low_sweep_buffer_step:number;asia_low_sweep_buffer_max:number;
+ previous_day_high_sweep_buffer_min:number;previous_day_high_sweep_buffer_step:number;previous_day_high_sweep_buffer_max:number;
+ previous_day_low_sweep_buffer_min:number;previous_day_low_sweep_buffer_step:number;previous_day_low_sweep_buffer_max:number;
 };
 export const DEFAULT_INDICATOR_RANGES:IndicatorRanges={
  ema_fast_min:5,ema_fast_step:1,ema_fast_max:28,
@@ -22,7 +27,12 @@ export const DEFAULT_INDICATOR_RANGES:IndicatorRanges={
  rsi_period_min:7,rsi_period_step:1,rsi_period_max:25,
  rsi_oversold_min:20,rsi_oversold_step:1,rsi_oversold_max:40,
  breakout_lookback_min:12,breakout_lookback_step:1,breakout_lookback_max:75,
- sweep_buffer_min:0,sweep_buffer_step:1,sweep_buffer_max:10,
+ london_high_sweep_buffer_min:0,london_high_sweep_buffer_step:1,london_high_sweep_buffer_max:10,
+ london_low_sweep_buffer_min:0,london_low_sweep_buffer_step:1,london_low_sweep_buffer_max:10,
+ asia_high_sweep_buffer_min:0,asia_high_sweep_buffer_step:1,asia_high_sweep_buffer_max:10,
+ asia_low_sweep_buffer_min:0,asia_low_sweep_buffer_step:1,asia_low_sweep_buffer_max:10,
+ previous_day_high_sweep_buffer_min:0,previous_day_high_sweep_buffer_step:1,previous_day_high_sweep_buffer_max:10,
+ previous_day_low_sweep_buffer_min:0,previous_day_low_sweep_buffer_step:1,previous_day_low_sweep_buffer_max:10,
 };
 export type AlgoConfig = {
  name:string;dataset_id:string;symbol:string;timeframe:string;timeframes:string[];
@@ -81,13 +91,13 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
   !f.endsWith("_sweep")||c.direction==="both"||(c.direction==="short"&&shortOnly.has(f))||(c.direction==="long"&&longOnly.has(f))
  );
  const invalidRanges=(
-  ["ema_fast","ema_slow","rsi_period","rsi_oversold","breakout_lookback","sweep_buffer"] as const
+  ["ema_fast","ema_slow","rsi_period","rsi_oversold","breakout_lookback","london_high_sweep_buffer","london_low_sweep_buffer","asia_high_sweep_buffer","asia_low_sweep_buffer","previous_day_high_sweep_buffer","previous_day_low_sweep_buffer"] as const
  ).some(name=>{
   const min=ranges[(name+"_min") as keyof IndicatorRanges];
   const max=ranges[(name+"_max") as keyof IndicatorRanges];
   const step=ranges[(name+"_step") as keyof IndicatorRanges];
-  const lower=name==="sweep_buffer"?0:name==="ema_fast"||name==="rsi_period"?2:name==="ema_slow"?10:name==="rsi_oversold"?5:5;
-  const upper=name==="sweep_buffer"?30:name==="ema_fast"?100:name==="ema_slow"||name==="breakout_lookback"?250:name==="rsi_period"?60:45;
+  const lower=name.endsWith("_buffer")?0:name==="ema_fast"||name==="rsi_period"?2:name==="ema_slow"?10:name==="rsi_oversold"?5:5;
+  const upper=name.endsWith("_buffer")?30:name==="ema_fast"?100:name==="ema_slow"||name==="breakout_lookback"?250:name==="rsi_period"?60:45;
   return !Number.isInteger(min)||!Number.isInteger(max)||!Number.isInteger(step)||step<1||step>30||min<lower||max>upper||min>max;
  })||ranges.ema_fast_min+8>ranges.ema_slow_max;
  const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||sweepTimeframeError||directionMismatch||c.candidates<10;
