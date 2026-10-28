@@ -1,0 +1,9 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+polars>=1.30,<2.0
+numpy>=2.0,<2.6
+numba>=0.66,<0.69
+python-multipart>=0.0.20,<1
+pydantic>=2.11,<3
+pytest>=8,<10
+httpx>=0.28,<1
