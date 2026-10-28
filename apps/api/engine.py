@@ -15,7 +15,7 @@ import numpy as np
 import polars as pl
 from numba import njit
 
-FAMILIES = {0: "ema_cross", 1: "rsi_reversion", 2: "breakout"}
+FAMILIES = {0: "ema_cross", 1: "rsi_reversion", 2: "breakout", 3: "london_high_sweep", 4: "london_low_sweep", 5: "asia_high_sweep", 6: "asia_low_sweep", 7: "previous_day_high_sweep", 8: "previous_day_low_sweep"}
 INTERVALS = {"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "4h": "4h", "1d": "1d"}
 
 
