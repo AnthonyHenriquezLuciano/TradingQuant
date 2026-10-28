@@ -6,7 +6,7 @@ import {
  Dna, FlaskConical, LoaderCircle, Play, Settings2, ShieldCheck,
  SlidersHorizontal, Sparkles, UploadCloud, ChartNoAxesCombined, Activity, ListFilter, TrendingUp
 } from "lucide-react";
-import {IndicatorCatalog} from "./indicator-catalog";
+import {IndicatorCatalog, type MacroRule} from "./indicator-catalog";
 
 export type IndicatorRanges = {
  ema_fast_min:number;ema_fast_step:number;ema_fast_max:number;
@@ -39,7 +39,7 @@ export type AlgoConfig = {
  start_date:string;end_date:string;initial_deposit:number;mode:"random"|"genetic";
  modeling:"open"|"ohlc"|"m1"|"ticks";sizing:"compound"|"fixed";
  multi_tf:"individual"|"combined"|"both";generations:number;candidates:number;
- families:string[];indicator_ranges:IndicatorRanges;source_timezone:string;direction:"long"|"short"|"both";risk_pct:number;rr:number;
+ families:string[];indicator_ranges:IndicatorRanges;source_timezone:string;macro_indicators:string[];macro_rules:Record<string,MacroRule>;direction:"long"|"short"|"both";risk_pct:number;rr:number;
  atr_multiplier:number;cost_bps:number;is_ratio:number;min_trades:number;
  mc_iterations:number;prop_daily_pct:number;prop_max_pct:number;
 };
@@ -100,7 +100,8 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
   const upper=name.endsWith("_buffer")?30:name==="ema_fast"?100:name==="ema_slow"||name==="breakout_lookback"?250:name==="rsi_period"?60:45;
   return !Number.isInteger(min)||!Number.isInteger(max)||!Number.isInteger(step)||step<1||step>30||min<lower||max>upper||min>max;
  })||ranges.ema_fast_min+8>ranges.ema_slow_max;
- const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||sweepTimeframeError||directionMismatch||c.candidates<10;
+ const hasPendingMacro=(c.macro_indicators||[]).length>0;
+ const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||sweepTimeframeError||directionMismatch||hasPendingMacro||c.candidates<10;
  const missing=[
   ...(!c.symbol?["símbolo"]:[]),
   ...(!c.start_date||!c.end_date?["fecha de inicio y fin"]:[]),
@@ -110,7 +111,8 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
   ...(!c.families.length?["al menos un indicador"]:[]),
   ...(invalidRanges?["rangos de indicadores válidos"]:[]),
   ...(sweepTimeframeError?["usar solo M1–H1 con barridas de sesión"]:[]),
-  ...(directionMismatch?["dirección compatible con las situaciones seleccionadas"]:[])
+  ...(directionMismatch?["dirección compatible con las situaciones seleccionadas"]:[]),
+  ...(hasPendingMacro?["retirar o dejar pendientes las reglas macro sin fuente de datos"]:[])
  ];
  const chooseTF=(value:string)=>{
   const next=tfs.includes(value)?tfs.filter(t=>t!==value):[...tfs,value];
@@ -167,7 +169,7 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
     <div><div className="tq-one-ready"><ShieldCheck size={16}/><strong>{missing.length?"Configuración pendiente":"Configuración completa"}</strong></div><p>{missing.length?"Falta: "+missing.join(", "):"Revisa los parámetros antes de ejecutar."}</p></div>
     <button className="btn btn-primary" disabled={cannotRun} onClick={onExecute}>{loading?<LoaderCircle className="spin" size={17}/>:<Play size={16}/>} {loading?"Ejecutando...":"Iniciar exploración"} <ArrowRight size={16}/></button>
    </div>
-  </div>:<div className="tq-one-panel tq-indicator-panel"><div className="tq-one-panel-header"><div className="tq-one-header-icon"><ChartNoAxesCombined size={19}/></div><div><strong>Indicadores y situaciones de mercado</strong><span>Señales técnicas, patrones de liquidez y parámetros Desde / Pasos / Hasta</span></div><span className="tq-one-header-tag">CATÁLOGO</span></div><IndicatorCatalog families={c.families} ranges={ranges} sourceTimezone={c.source_timezone||"UTC"} onFamilies={v=>update("families",v)} onRanges={v=>update("indicator_ranges",v)} onTimezone={v=>update("source_timezone",v)}/><footer className="tq-one-footer"><div><div className="tq-one-ready"><Check size={15}/><strong>{c.families.length} elementos seleccionados</strong></div><p>Todos los cambios se guardan en esta sesión.</p></div><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>}
+  </div>:<div className="tq-one-panel tq-indicator-panel"><div className="tq-one-panel-header"><div className="tq-one-header-icon"><ChartNoAxesCombined size={19}/></div><div><strong>Indicadores y situaciones de mercado</strong><span>Señales técnicas, patrones de liquidez y parámetros Desde / Pasos / Hasta</span></div><span className="tq-one-header-tag">CATÁLOGO</span></div><IndicatorCatalog families={c.families} ranges={ranges} sourceTimezone={c.source_timezone||"UTC"} macroIndicators={c.macro_indicators||[]} macroRules={c.macro_rules||{}} onFamilies={v=>update("families",v)} onRanges={v=>update("indicator_ranges",v)} onTimezone={v=>update("source_timezone",v)} onMacroIndicators={v=>update("macro_indicators",v)} onMacroRules={v=>update("macro_rules",v)}/><footer className="tq-one-footer"><div><div className="tq-one-ready"><Check size={15}/><strong>{c.families.length} elementos seleccionados</strong></div><p>Todos los cambios se guardan en esta sesión.</p></div><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>}
 
   <div className="tq-one-footnote"><Sparkles size={14}/> Investigación cuantitativa · Resultados OOS no garantizan rendimiento futuro · Modelado M1/tick pendiente de integración.</div>
  </div>;
