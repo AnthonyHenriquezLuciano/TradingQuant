@@ -2,7 +2,7 @@
 
 Assumptions: next-bar OPEN entries; previous completed bar indicators/ATR;
 stop-first on bars hitting stop and target; one position at a time;
-no position carried across IS/OOS boundary; fixed fraction risk;
+no position carried across IS/OOS boundary; fixed/compounding sizing;
 simplified round-trip basis-point cost, not broker-accurate.
 """
 from __future__ import annotations
@@ -210,7 +210,7 @@ def simulate(signals, op, high, low, close, atr, days, start, end,
             elif low[i] <= tp:
                 exit_price = tp
         if i == end - 1 and np.isnan(exit_price):
-            exit_price = close[i]
+            exit_price = op[i] if modeling == 0 else close[i]
         if not np.isnan(exit_price):
             gross = (exit_price - entry) * side
             round_trip_cost = entry * cost_bps / 10000.0
