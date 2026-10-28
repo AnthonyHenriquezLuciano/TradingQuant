@@ -67,36 +67,78 @@ def confirmed_higher_bias(source: pl.DataFrame, lower: pl.DataFrame, htf: str) -
     return joined["bias"].fill_null(0).to_numpy().astype(np.int8)
 
 
-def random_gene(rng: random.Random, families: list[int]) -> tuple[int, int, int]:
+DEFAULT_RANGES = {
+    "ema_fast_min": 5, "ema_fast_max": 28,
+    "ema_slow_min": 29, "ema_slow_max": 90,
+    "rsi_period_min": 7, "rsi_period_max": 25,
+    "rsi_oversold_min": 20, "rsi_oversold_max": 40,
+    "breakout_lookback_min": 12, "breakout_lookback_max": 75,
+}
+
+
+def checked_ranges(config: dict[str, Any]) -> dict[str, int]:
+    ranges = {**DEFAULT_RANGES, **(config.get("indicator_ranges") or {})}
+    limits = {
+        "ema_fast": (2, 100), "ema_slow": (10, 250),
+        "rsi_period": (2, 60), "rsi_oversold": (5, 45),
+        "breakout_lookback": (5, 250),
+    }
+    for prefix, (minimum, maximum) in limits.items():
+        a, b = ranges[prefix + "_min"], ranges[prefix + "_max"]
+        if not isinstance(a, int) or isinstance(a, bool) or not isinstance(b, int) or isinstance(b, bool):
+            raise ValueError("Los parámetros de indicadores deben ser números enteros.")
+        if not (minimum <= a <= b <= maximum):
+            raise ValueError("Rango inválido para " + prefix + ".")
+    if ranges["ema_fast_min"] + 8 > ranges["ema_slow_max"]:
+        raise ValueError("Los rangos EMA no permiten una pareja rápida/lenta válida.")
+    return ranges
+
+
+def random_gene(
+    rng: random.Random, families: list[int], ranges: dict[str, int] | None = None,
+) -> tuple[int, int, int]:
+    r = ranges or DEFAULT_RANGES
     kind = rng.choice(families)
     if kind == 0:
-        fast = rng.randint(5, 28)
-        slow = rng.randint(max(29, fast+8), 90)
+        lower = r["ema_fast_min"]
+        upper = min(r["ema_fast_max"], r["ema_slow_max"] - 8)
+        if lower > upper:
+            raise ValueError("No existe una combinación EMA válida.")
+        fast = rng.randint(lower, upper)
+        slow = rng.randint(max(r["ema_slow_min"], fast + 8), r["ema_slow_max"])
     elif kind == 1:
-        fast = rng.randint(7, 25)
-        slow = rng.randint(20, 40)
+        fast = rng.randint(r["rsi_period_min"], r["rsi_period_max"])
+        slow = rng.randint(r["rsi_oversold_min"], r["rsi_oversold_max"])
     else:
         fast = 0
-        slow = rng.randint(12, 75)
-    return (kind, fast, slow)
+        slow = rng.randint(r["breakout_lookback_min"], r["breakout_lookback_max"])
+    return kind, fast, slow
 
 
-def mutate_or_cross(rng: random.Random, a: tuple[int, int, int],
-                    b: tuple[int, int, int], families: list[int]) -> tuple[int, int, int]:
+def mutate_or_cross(
+    rng: random.Random, a: tuple[int, int, int],
+    b: tuple[int, int, int], families: list[int],
+    ranges: dict[str, int] | None = None,
+) -> tuple[int, int, int]:
+    r = ranges or DEFAULT_RANGES
     if rng.random() < .13:
-        return random_gene(rng, families)
+        return random_gene(rng, families, r)
     kind = rng.choice((a[0], b[0]))
     if kind == 0:
-        fast = max(5, min(28, rng.choice((a[1], b[1])) + rng.randint(-3, 3)))
-        slow = max(29, min(90, rng.choice((a[2], b[2])) + rng.randint(-7, 7)))
-        slow = max(slow, fast + 8)
+        max_fast = min(r["ema_fast_max"], r["ema_slow_max"] - 8)
+        fast = max(r["ema_fast_min"], min(max_fast, rng.choice((a[1], b[1])) + rng.randint(-3, 3)))
+        slow = max(max(r["ema_slow_min"], fast + 8),
+                   min(r["ema_slow_max"], rng.choice((a[2], b[2])) + rng.randint(-7, 7)))
     elif kind == 1:
-        fast = max(7, min(25, rng.choice((a[1], b[1])) + rng.randint(-3, 3)))
-        slow = max(20, min(40, rng.choice((a[2], b[2])) + rng.randint(-4, 4)))
+        fast = max(r["rsi_period_min"],
+                   min(r["rsi_period_max"], rng.choice((a[1], b[1])) + rng.randint(-3, 3)))
+        slow = max(r["rsi_oversold_min"],
+                   min(r["rsi_oversold_max"], rng.choice((a[2], b[2])) + rng.randint(-4, 4)))
     else:
         fast = 0
-        slow = max(12, min(75, rng.choice((a[2], b[2])) + rng.randint(-8, 8)))
-    return (kind, fast, slow)
+        slow = max(r["breakout_lookback_min"],
+                   min(r["breakout_lookback_max"], rng.choice((a[2], b[2])) + rng.randint(-8, 8)))
+    return kind, fast, slow
 
 
 def sharpe_of_daily_trades(outcomes: np.ndarray, days: np.ndarray) -> float:
@@ -154,6 +196,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         raise ValueError("El presupuesto debe estar entre 1 y 2,000 combinaciones.")
     if cfg.get("initial_deposit", 5000) < 100:
         raise ValueError("El depósito inicial debe ser al menos USD 100.")
+    ranges = checked_ranges(cfg)
     families = [i for i,name in FAMILIES.items() if name in cfg["families"]]
     if not families:
         raise ValueError("Selecciona alguna familia de indicadores.")
@@ -225,7 +268,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             attempts = 0
             while len(evaluated) < max_eval and attempts < max_eval*25:
                 attempts += 1
-                gene = random_gene(rng,families)
+                gene = random_gene(rng,families,ranges)
                 for side in directions:
                     if len(evaluated) >= max_eval:
                         break
@@ -244,12 +287,12 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 while len(new_gen)<target and attempts < max_eval*50:
                     attempts += 1
                     if not population or gen == 0:
-                        gene = random_gene(rng,families)
+                        gene = random_gene(rng,families,ranges)
                     else:
                         elite = sorted(population,key=lambda t:t["score"],reverse=True)[:max(2,len(population)//2)]
                         mother = rng.choice(elite)["gene"]
                         father = rng.choice(elite)["gene"]
-                        gene = mutate_or_cross(rng,mother,father,families)
+                        gene = mutate_or_cross(rng,mother,father,families,ranges)
                     for side in directions:
                         if len(new_gen) >= target:
                             break
@@ -263,7 +306,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 population = sorted(population+new_gen,key=lambda t:t["score"],reverse=True)[:pop_size]
             while len(evaluated)<max_eval and attempts<max_eval*50:
                 attempts += 1
-                gene = random_gene(rng,families)
+                gene = random_gene(rng,families,ranges)
                 for side in directions:
                     if len(evaluated) >= max_eval:
                         break
