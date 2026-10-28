@@ -210,7 +210,7 @@ def simulate(signals, op, high, low, close, atr, days, start, end,
             exit_price = close[i]
         if not np.isnan(exit_price):
             gross = (exit_price - entry) * side
-            round_trip_cost = 2.0 * entry * cost_bps / 10000.0
+            round_trip_cost = entry * cost_bps / 10000.0
             outcomes[ntr] = (gross - round_trip_cost) / distance
             trade_days[ntr] = trade_day
             ntr += 1
