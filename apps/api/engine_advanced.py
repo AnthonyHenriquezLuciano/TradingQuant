@@ -229,6 +229,15 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     rng = random.Random(20261028)
     direction = {"both":0,"long":1,"short":-1}[cfg["direction"]]
     directions = [1,-1] if direction == 0 else [direction]
+    if all(k in SITUATIONS for k in families) and not any(
+        SITUATIONS[k][4] in directions for k in families
+    ):
+        raise ValueError("Las situaciones elegidas no generan señales en la dirección seleccionada.")
+
+    def sides_for(gene):
+        return ([side for side in directions if side == SITUATIONS[gene[0]][4]]
+                if gene[0] in SITUATIONS else directions)
+
     sampling_model = 0 if modeling == "open" else 1
     per = [budget//len(jobs) + (i<budget%len(jobs)) for i in range(len(jobs))]
     all_trials: list[dict] = []
@@ -289,7 +298,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             while len(evaluated) < max_eval and attempts < max_eval*25:
                 attempts += 1
                 gene = random_gene(rng,families,ranges)
-                for side in directions:
+                for side in sides_for(gene):
                     if len(evaluated) >= max_eval:
                         break
                     trial = assess(gene,side)
@@ -313,7 +322,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                         mother = rng.choice(elite)["gene"]
                         father = rng.choice(elite)["gene"]
                         gene = mutate_or_cross(rng,mother,father,families,ranges)
-                    for side in directions:
+                    for side in sides_for(gene):
                         if len(new_gen) >= target:
                             break
                         trial = assess(gene,side)
@@ -327,7 +336,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             while len(evaluated)<max_eval and attempts<max_eval*50:
                 attempts += 1
                 gene = random_gene(rng,families,ranges)
-                for side in directions:
+                for side in sides_for(gene):
                     if len(evaluated) >= max_eval:
                         break
                     trial = assess(gene,side)
