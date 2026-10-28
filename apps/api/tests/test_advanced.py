@@ -96,3 +96,49 @@ def test_reject_fake_upsampling_from_five_minute_source():
     )
     with pytest.raises(ValueError, match="No se generan velas"):
         run_advanced(source, config(timeframes=["1m"],timeframe="1m"))
+
+
+def test_indicator_range_sampler_respects_limits():
+    import random
+    from engine_advanced import checked_ranges, random_gene, mutate_or_cross
+    cfg = config()
+    cfg["indicator_ranges"] = dict(
+        ema_fast_min=9, ema_fast_max=11,
+        ema_slow_min=31, ema_slow_max=34,
+        rsi_period_min=13, rsi_period_max=16,
+        rsi_oversold_min=26, rsi_oversold_max=29,
+        breakout_lookback_min=18, breakout_lookback_max=21,
+    )
+    ranges = checked_ranges(cfg)
+    rng = random.Random(10)
+    for kind in (0, 1, 2):
+        for _ in range(20):
+            a = random_gene(rng, [kind], ranges)
+            b = random_gene(rng, [kind], ranges)
+            for gene in (a, mutate_or_cross(rng, a, b, [kind], ranges)):
+                family, fast, slow = gene
+                assert family == kind
+                if kind == 0:
+                    assert 9 <= fast <= 11
+                    assert 31 <= slow <= 34
+                    assert slow >= fast + 8
+                elif kind == 1:
+                    assert 13 <= fast <= 16
+                    assert 26 <= slow <= 29
+                else:
+                    assert fast == 0
+                    assert 18 <= slow <= 21
+
+
+def test_indicator_ranges_propagate_into_candidates():
+    cfg = config(candidates=12, families=["breakout"])
+    cfg["indicator_ranges"] = {"breakout_lookback_min": 18, "breakout_lookback_max": 20}
+    result = run_advanced(synthetic_bars(), cfg)
+    assert result["tested"] <= 6
+    assert all(18 <= item["params"]["lookback"] <= 20 for item in result["candidates"])
+
+
+def test_invalid_indicator_ranges_rejected():
+    from engine_advanced import checked_ranges
+    with pytest.raises(ValueError, match="Rango inválido"):
+        checked_ranges({"indicator_ranges": {"rsi_period_min": 25, "rsi_period_max": 12}})
