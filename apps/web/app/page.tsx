@@ -31,7 +31,7 @@ const pct=(x:number|null|undefined)=>x===null||x===undefined?"—":n2(x)+"%";
 const fCurrency=(n:number)=>new Intl.NumberFormat("es-DO").format(n);
 const NAV: {section:string;items:{id:View|null;label:string;icon:LucideIcon;sub?:string}[]}[]=[
  {section:"WORKSPACE",items:[{id:"home",label:"Visión general",icon:LayoutDashboard}]},
- {section:"LABORATORIO",items:[{id:"sessions",label:"Creador de algoritmos",icon:WandSparkles},{id:"results",label:"Exploraciones",icon:FlaskConical},{id:"validation",label:"Validación científica",icon:ShieldCheck},{id:null,label:"Portafolios",icon:Layers3,sub:"Próximamente"}]},
+ {section:"LABORATORIO",items:[{id:"sessions",label:"Creador de algoritmos",icon:WandSparkles},{id:null,label:"Portafolios",icon:Layers3,sub:"Próximamente"}]},
  {section:"INFRAESTRUCTURA",items:[{id:"datasets",label:"Datos históricos",icon:Database},{id:null,label:"IDE de estrategias",icon:TerminalSquare,sub:"Próximamente"}]}
 ];
 function Brand(){return <div className="brand-mark"><div className="brand-symbol"><Activity size={19} strokeWidth={2.6}/></div><div className="brand-copy">TRADING<span>QUANT</span><small>QUANT RESEARCH PLATFORM</small></div></div>}
@@ -76,7 +76,8 @@ export default function Page(){
  function change<K extends keyof Config>(key:K,value:Config[K]){setCfg(p=>({...p,[key]:value}));setError("")}
  function open(v:View){setView(v);setMobile(false);setError("");setNotice("")}
  function start(){open("sessions")}
- function createSession(name:string,symbol:string){
+ function createSession(name:string){
+   const symbol=DEFAULT.symbol;
    const next:AlgoSession<Config>={id:crypto.randomUUID(),name,symbol,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:"draft",config:{...DEFAULT,name,symbol}};
    setSessions(prev=>[next,...prev]);
  }
