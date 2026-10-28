@@ -73,6 +73,13 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
  const ranges={...DEFAULT_INDICATOR_RANGES,...c.indicator_ranges};
  const multiNeedsTwo=c.multi_tf!=="individual"&&tfs.length<2;
  const invalidPeriod=Boolean(c.start_date&&c.end_date&&c.start_date>c.end_date);
+ const selectedSituations=c.families.filter(f=>f.endsWith("_sweep"));
+ const sweepTimeframeError=selectedSituations.length>0&&tfs.some(tf=>tf==="4h"||tf==="1d");
+ const shortOnly=new Set(["london_high_sweep","asia_high_sweep","previous_day_high_sweep"]);
+ const longOnly=new Set(["london_low_sweep","asia_low_sweep","previous_day_low_sweep"]);
+ const directionMismatch=c.families.length>0&&!c.families.some(f=>
+  !f.endsWith("_sweep")||c.direction==="both"||(c.direction==="short"&&shortOnly.has(f))||(c.direction==="long"&&longOnly.has(f))
+ );
  const invalidRanges=(
   ["ema_fast","ema_slow","rsi_period","rsi_oversold","breakout_lookback","sweep_buffer"] as const
  ).some(name=>{
@@ -83,7 +90,7 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
   const upper=name==="sweep_buffer"?30:name==="ema_fast"?100:name==="ema_slow"||name==="breakout_lookback"?250:name==="rsi_period"?60:45;
   return !Number.isInteger(min)||!Number.isInteger(max)||!Number.isInteger(step)||step<1||step>30||min<lower||max>upper||min>max;
  })||ranges.ema_fast_min+8>ranges.ema_slow_max;
- const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||c.candidates<10;
+ const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||sweepTimeframeError||directionMismatch||c.candidates<10;
  const missing=[
   ...(!c.symbol?["símbolo"]:[]),
   ...(!c.start_date||!c.end_date?["fecha de inicio y fin"]:[]),
@@ -91,7 +98,9 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
   ...(multiNeedsTwo?["dos intervalos para Multi-TF"]:[]),
   ...(invalidPeriod?["rango de fechas válido"]:[]),
   ...(!c.families.length?["al menos un indicador"]:[]),
-  ...(invalidRanges?["rangos de indicadores válidos"]:[])
+  ...(invalidRanges?["rangos de indicadores válidos"]:[]),
+  ...(sweepTimeframeError?["usar solo M1–H1 con barridas de sesión"]:[]),
+  ...(directionMismatch?["dirección compatible con las situaciones seleccionadas"]:[])
  ];
  const chooseTF=(value:string)=>{
   const next=tfs.includes(value)?tfs.filter(t=>t!==value):[...tfs,value];
