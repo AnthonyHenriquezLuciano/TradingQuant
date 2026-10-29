@@ -24,12 +24,14 @@ from research_validation import validate_quality,validate_walkforward,validate_m
 from execution_jobs import JOBS
 from preflight import preflight
 from dataset_uploads import UploadManager,UploadInit,CHUNK_BYTES
+from mt5_gateway import MT5Bridge,ConnectRequest,HistoryRequest
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 MAX_BYTES = min(max(int(os.getenv("TRADINGQUANT_MAX_UPLOAD_MB", "150")), 1), 4096) * 1024 * 1024
 app = FastAPI(title="TradingQuant Scientific API", version="0.1.0")
 UPLOADS=UploadManager(DATA_DIR)
+MT5=MT5Bridge(DATA_DIR.parent)
 class PrivateResearchMiddleware(BaseHTTPMiddleware):
     """Optional single-user API access control for public Docker deployments.
 
@@ -45,6 +47,12 @@ class PrivateResearchMiddleware(BaseHTTPMiddleware):
                 authorization=request.headers.get("authorization","")
                 if not secrets.compare_digest(authorization,"Bearer "+key):
                     return JSONResponse({"detail":"Token de acceso inválido o ausente."},status_code=401)
+        if request.url.path.startswith("/api/") and request.method!="OPTIONS" and os.getenv("TRADINGQUANT_REQUIRE_ACCOUNT","0")=="1":
+            if not request.url.path.startswith("/api/accounts/") and request.url.path!="/api/auth/check":
+                # Account selection is not a secret/token. It identifies the
+                # authenticated MT5 terminal currently attached to this PC.
+                account_id=request.headers.get("x-tradingquant-account","")
+                MT5.ensure_active(account_id)
         return await call_next(request)
 
 # Register security before CORS so preflight and all error responses keep
@@ -56,7 +64,7 @@ app.add_middleware(
     allow_origin_regex=r"https://tradingquant(?:-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT"],
-    allow_headers=["Content-Type","Authorization","X-Chunk-SHA256"],
+    allow_headers=["Content-Type","Authorization","X-Chunk-SHA256","X-TradingQuant-Account"],
 )
 
 class IndicatorRanges(BaseModel):
@@ -181,6 +189,38 @@ def check_access():
 def health():
     return {"status": "ok", "version": "0.1.0", "live_trading_enabled": False}
 
+
+
+@app.get("/api/accounts/status")
+def accounts_status():
+    return MT5.list()
+
+@app.post("/api/accounts/connect")
+def accounts_connect(payload:ConnectRequest):
+    return MT5.connect(payload)
+
+class ActivateAccount(BaseModel):
+    account_id:str=Field(min_length=5,max_length=180)
+
+@app.post("/api/accounts/activate")
+def accounts_activate(payload:ActivateAccount):
+    return MT5.activate(payload.account_id)
+
+@app.get("/api/accounts/symbols/all")
+def symbols_all():
+    return MT5.all_symbols()
+
+@app.get("/api/accounts/{account_id}/symbols")
+def account_symbols(account_id:str):
+    return MT5.symbols(account_id,refresh=True)
+
+@app.get("/api/accounts/{account_id}/symbols/{symbol}/specification")
+def account_specification(account_id:str,symbol:str):
+    return MT5.specification(account_id,symbol)
+
+@app.post("/api/accounts/history/import")
+def account_history_import(payload:HistoryRequest):
+    return MT5.import_history(payload,DATA_DIR)
 
 @app.post("/api/datasets/uploads",status_code=201)
 def begin_chunked_upload(options:UploadInit):
