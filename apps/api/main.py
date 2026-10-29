@@ -2,12 +2,15 @@
 from __future__ import annotations
 import os
 import uuid
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
 from engine import load_data, describe_data
@@ -25,12 +28,32 @@ DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 MAX_BYTES = 150 * 1024 * 1024
 app = FastAPI(title="TradingQuant Scientific API", version="0.1.0")
+class PrivateResearchMiddleware(BaseHTTPMiddleware):
+    """Optional single-user API access control for public Docker deployments.
+
+    This is a service-level shared token, not full user authentication.
+    Keep the token out of NEXT_PUBLIC env vars and source control.
+    """
+    async def dispatch(self,request:Request,call_next):
+        if request.url.path.startswith("/api/") and request.method!="OPTIONS":
+            if os.getenv("TRADINGQUANT_REQUIRE_AUTH","0")=="1":
+                key=os.getenv("TRADINGQUANT_ACCESS_TOKEN","")
+                if not key:
+                    return JSONResponse({"detail":"Falta configurar el token privado del servidor."},status_code=503)
+                authorization=request.headers.get("authorization","")
+                if not secrets.compare_digest(authorization,"Bearer "+key):
+                    return JSONResponse({"detail":"Token de acceso inválido o ausente."},status_code=401)
+        return await call_next(request)
+
+# Register security before CORS so preflight and all error responses keep
+# the correct allowed-origin headers.
+app.add_middleware(PrivateResearchMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("TRADINGQUANT_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(","),
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type","Authorization"],
 )
 
 class IndicatorRanges(BaseModel):
@@ -146,6 +169,10 @@ class ExplorationRequest(BaseModel):
         if self.prop_daily_pct > self.prop_max_pct:
             raise ValueError("El límite diario no debe superar el máximo total.")
         return self
+
+@app.get("/api/auth/check")
+def check_access():
+    return {"authorized":True,"research_enabled":True}
 
 @app.get("/health")
 def health():
