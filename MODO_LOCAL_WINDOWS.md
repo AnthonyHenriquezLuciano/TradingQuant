@@ -18,6 +18,22 @@ Windows 10/11, Node.js LTS con npm, Python 3.12 (64 bits) con el lanzador py, Gi
 
 La página publica de Vercel es distinta a la página local. Para trabajar sin Render hay que abrir http://127.0.0.1:3000.
 
+## Primer inicio obligatorio con MetaTrader 5
+
+1. Instala MetaTrader 5 de tu bróker o empresa de fondeo en Windows y **abre sesión desde el propio terminal**.
+2. Ejecuta **INICIAR_TRADINGQUANT_LOCAL.bat**. Ahora instala, además, el módulo oficial `MetaTrader5` de Python 3.12 para Windows. **No** necesitas instalar el módulo en Render.
+3. Abre **http://127.0.0.1:3000**. En el menú **Principal → Cuentas** selecciona **Nueva cuenta**, indica un nombre, el tipo (fondeo/real/demo), fase, reglas de DD y, opcionalmente, la ruta de `terminal64.exe`.
+4. TradingQuant se conectará **sin contraseña** al terminal ya autenticado, mostrará el login, servidor y bróker y desbloqueará el laboratorio.
+5. Puedes registrar varias cuentas desde diferentes instalaciones locales de MT5, cada una con su ruta a `terminal64.exe`. **Solo una conexión activa por proceso Python**: al cambiar de cuenta se verifica que el terminal abierto coincida con el login y servidor guardados.
+6. En Creador de algoritmos, el selector **Símbolo** proviene del inventario `symbols_get()` de la cuenta activa; puedes importar velas de MT5 usando el intervalo de fechas seleccionado (90 días M1 si dejas el campo de fechas vacío).
+7. En **Costes**, el terminal aporta spread actual, tamaño y valor del tick, tamaño de contrato, lotaje y swaps. **No se garantiza obtener comisiones por lote ni slippage históricos** a través de `symbol_info`; completa los valores no disponibles antes de activar el catálogo de costes.
+
+**Requisitos y límites:** Windows con terminal MT5 abierto y autenticado, Python 3.12 de 64 bits; `MetaTrader5` no funciona como reemplazo de un terminal en la nube. El historial es el disponible en MT5 y está sujeto a su parámetro *Tools → Options → Charts → Max. bars in chart*. Las barras y ticks de MT5 se interpretan en UTC. No hay envío de órdenes (`order_send` no se utiliza) y no se almacenan contraseñas en GitHub ni en el disco de TradingQuant.
+
+## Indicadores y transparencia de datos
+
+El generador actualmente tiene **59 familias de señales implementadas y ejecutables** (9 originales y 50 nuevas basadas en OHLC). Los otros elementos del catálogo, especialmente macroeconómicos, profundidad, Delta/CVD y perfiles de volumen, permanecerán deshabilitados hasta contar con datos y fórmulas verificables; no se presentan como estadísticas reales indicadores que requieren fuentes adicionales. Las pruebas automáticas comprueban que las señales técnicas no emplean velas futuras.
+
 ## Importación directa sin subir por el navegador
 
 Para CSV M1 de varios años puedes evitar por completo la transferencia HTTP:
