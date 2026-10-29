@@ -170,6 +170,8 @@ def objective_score(
         "funding_pass_rate": funding,
     }
     score = float(np.clip(values[metric], -1e6, 1e6))
+    if funding_result is not None and not funding_result["eligible"]:
+        score=min(score,-1e5)
     return score, {
         "objective_score": round(score, 6),
         "funding_evaluation_is": funding_result,
