@@ -23,6 +23,7 @@ type Props={
 };
 
 const PARAMS:Record<string,{name:string;min:number;max:number;unit?:string}>={
+ tech_period:{name:"Periodo técnico · barras",min:2,max:150},
  ema_fast:{name:"EMA rápida · periodo",min:2,max:100},
  ema_slow:{name:"EMA lenta · periodo",min:10,max:250},
  rsi_period:{name:"RSI · periodo",min:2,max:60},
