@@ -132,7 +132,43 @@ export default function Page(){
    if(target?.runId)setRuns(prev=>prev.filter(r=>r.id!==target.runId));
    if(activeSessionId===id)setActiveSessionId(null);
  }
- async function upload(file:File){setUploading(true);setError("");setNotice("");try{if(!/\.csv$/i.test(file.name))throw Error("Selecciona un archivo .csv con datos OHLC.");if(file.size>150*1024*1024)throw Error("Máximo 150 MB por archivo en esta fase.");const form=new FormData();form.append("file",file);const resp=await fetch(`${API}/api/datasets/upload`,{method:"POST",headers:authHeaders,body:form});const data=await resp.json();if(!resp.ok)throw Error(data.detail||"No se pudo procesar el CSV.");setDatasets(p=>[data,...p.filter(x=>x.id!==data.id)]);change("dataset_id",data.id);setNotice(`Archivo ${data.filename} importado: ${fCurrency(data.rows)} velas válidas.`)}catch(e){setError(e instanceof Error?e.message:"Error de red. ¿Está iniciada la API FastAPI?")}finally{setUploading(false);if(fileRef.current)fileRef.current.value=""}}
+ async function upload(file:File){
+  setUploading(true);setError("");setNotice("");
+  try{
+   if(!API)throw Error("No se ha conectado un servidor FastAPI. Configura la URL de Render en Conexión con motor.");
+   if(!accessToken)throw Error("Falta el token privado: introdúcelo en Conexión con motor y pulsa «Guardar token en esta sesión» antes de importar.");
+   if(!/\.csv$/i.test(file.name))throw Error("Selecciona un archivo .csv con datos OHLC.");
+   if(file.size>150*1024*1024)throw Error("El límite actual por archivo CSV es de 150 MB.");
+   const header=(await file.slice(0,4096).text()).replace(/^\uFEFF/,"").split(/\r?\n/,1)[0];
+   const isMT5=/<DATE>\s+<TIME>\s+<OPEN>\s+<HIGH>\s+<LOW>\s+<CLOSE>/i.test(header);
+   if(isMT5)setNotice("Formato MT5 detectado: fecha, hora y OHLC separados por tabulaciones.");
+   if(file.size>20*1024*1024)setNotice("Archivo grande: Render Free tiene 512 MB de RAM y podría agotar memoria al leer años de velas M1.");
+   const form=new FormData();form.append("file",file);
+   let resp:Response;
+   try{
+    resp=await fetch(API+"/api/datasets/upload",{method:"POST",headers:authHeaders,body:form});
+   }catch{
+    throw Error("No se pudo completar la subida a Render. Comprueba el dominio y el token en «Probar conexión». Si el CSV es grande, revisa Render → Logs por reinicios o falta de memoria (512 MB en Free).");
+   }
+   const raw=await resp.text();
+   let data:Record<string,any>={};
+   try{data=JSON.parse(raw)}catch{ /* Render may return HTML on 502/413 */ }
+   if(!resp.ok){
+    const detail=typeof data.detail==="string"?data.detail:"";
+    if(resp.status===401)throw Error("Acceso denegado (401). Comprueba el token en «Guardar token en esta sesión» y vuelve a probar la conexión.");
+    if(resp.status===403)throw Error("Acceso rechazado (403). Verifica los permisos de la API.");
+    if(resp.status===413)throw Error("Archivo demasiado grande para el servicio (413). Reduce el periodo histórico o amplía el servidor.");
+    if(resp.status===422)throw Error("CSV inválido: "+(detail||"Verifica fechas y columnas MT5."));
+    if(resp.status>=500)throw Error("Error del motor Render (HTTP "+resp.status+"). Comprueba Render → Logs y capacidad de memoria del servidor.");
+    throw Error(detail||"No se pudo importar el CSV (HTTP "+resp.status+").");
+   }
+   if(!data.id||typeof data.rows!=="number")throw Error("El motor devolvió una respuesta inesperada al importar el CSV.");
+   setDatasets(p=>[data as Dataset,...p.filter(x=>x.id!==data.id)]);
+   change("dataset_id",String(data.id));
+   setNotice("CSV "+data.filename+" importado: "+fCurrency(data.rows)+" velas válidas"+(isMT5?" (MetaTrader 5).":"."));
+  }catch(e){setError(e instanceof Error?e.message:"No se pudo subir el archivo CSV.")}
+  finally{setUploading(false);if(fileRef.current)fileRef.current.value=""}
+ }
  function saveBackend(){
   const address=backendDraft.trim().replace(/\/+$/,"");
   if(!address){localStorage.removeItem("tq_api_url");setApiUrl(DEFAULT_API);setBackendDraft(DEFAULT_API);setApiStatus("unknown");return}
