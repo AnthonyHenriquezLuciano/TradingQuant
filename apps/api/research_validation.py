@@ -75,13 +75,13 @@ def validate_costs(raw=None):
     if raw is not None and not isinstance(raw,dict):
         raise ValueError("Costes inválidos.")
     c={**DEFAULT_COSTS,**(raw or {})}
-    if c["template"] not in ("generic","custom") or not isinstance(c["use_in_backtest"],bool) or c["auto_mt5"] is not False:
-        raise ValueError("La conexión MT5 todavía no está disponible.")
+    if c["template"] not in ("generic","custom") or not isinstance(c["use_in_backtest"],bool) or not isinstance(c["auto_mt5"],bool):
+        raise ValueError("Configuración automática MT5 inválida.")
     if not isinstance(c["instruments"],list) or len(c["instruments"])>100:
         raise ValueError("Máximo 100 instrumentos en el catálogo.")
     seen=set()
     for row in c["instruments"]:
-        if not isinstance(row,dict) or not isinstance(row.get("symbol"),str) or not 1<len(row["symbol"])<=24:
+        if not isinstance(row,dict) or not isinstance(row.get("symbol"),str) or not 1<len(row["symbol"])<=90:
             raise ValueError("Símbolo de costes inválido.")
         sym=row["symbol"].upper()
         if sym in seen:
