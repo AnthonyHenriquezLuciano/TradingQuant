@@ -69,6 +69,9 @@ app.add_middleware(
 )
 
 class IndicatorRanges(BaseModel):
+    tech_period_min:int=Field(default=10,ge=2,le=150)
+    tech_period_step:int=Field(default=5,ge=1,le=30)
+    tech_period_max:int=Field(default=30,ge=2,le=150)
     ema_fast_min: int = Field(default=5, ge=2, le=100)
     ema_fast_step: int = Field(default=1, ge=1, le=30)
     ema_fast_max: int = Field(default=28, ge=2, le=100)
