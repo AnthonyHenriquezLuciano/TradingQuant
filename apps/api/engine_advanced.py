@@ -36,6 +36,15 @@ from research_robustness import (
 ORDER = list(INTERVALS)
 
 
+
+def market_chart_candles(op,hi,lo,close,timestamps,start,end,limit=260):
+    start=max(start,end-limit)
+    return [{
+        "time":np.datetime_as_string(np.datetime64(timestamps[i]),unit="m"),
+        "open":round(float(op[i]),6),"high":round(float(hi[i]),6),
+        "low":round(float(lo[i]),6),"close":round(float(close[i]),6),
+    } for i in range(start,end)]
+
 def build_trade_ledger(outcomes,trace,timestamps,initial_deposit,risk_pct,sizing):
     """Faithful executed-trade accounting from the SAME Numba kernel as metrics.
 
@@ -642,6 +651,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
             walk_forward=wf_report,multiverse=multiverse,
             estimated_cost_bps=trial["estimated_cost_bps"],
             ledger=trade_ledger,ledger_scope="OOS",
+            market_chart=market_chart_candles(op,hi,lo,cl,trial["timestamp"],cut,n),
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
         ))
