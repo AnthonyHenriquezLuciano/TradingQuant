@@ -195,6 +195,6 @@ def simulate_funding(
     base["days_limit_pass"]=bool(cap==0 or (count and base["selected_percentile_days"]<=cap))
     base["pass_within_day_cap_pct"]=round(
         (100.*sum(1 for n_days in successful_days if n_days<=cap)/n) if cap else rate,2)
-    base["eligible"]=bool(base["min_rate_pass"] and base["days_limit_pass"] and count)
+    base["eligible"]=bool(base["min_rate_pass"] and base["days_limit_pass"] and (count>0 or (cfg["min_pass_rate_pct"]==0 and cap==0)))
     base["insufficient_history"]=False
     return base
