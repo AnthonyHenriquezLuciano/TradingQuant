@@ -6,8 +6,10 @@ bound of a generator whose parameters and order execution may vary.
 from __future__ import annotations
 import numpy as np
 from engine import resample,atr_wilder,make_signals
+from engine_advanced import filter_period
 
 def preflight(frame, cfg):
+    frame=filter_period(frame,cfg)
     timeframes=cfg.get("timeframes") or [cfg.get("timeframe","5m")]
     info=[]
     warnings=[]
@@ -52,7 +54,7 @@ def preflight(frame, cfg):
         maximum=int(cap.get("max_trades_per_day",0))
         if maximum>0 and samples and max(x["max_signals_day"] for x in samples)<maximum:
             warnings.append(f"{timeframe.upper()}: en el muestreo preliminar ninguna familia produjo {maximum} señales diarias. La regla puede ser redundante; parámetros alternativos podrían producir más.")
-        if cap.get("max_bars_in_trade",0)>0 and maximum>int(np.max(perday)):
+        if maximum>int(np.max(perday)):
             warnings.append(f"{timeframe.upper()}: {maximum} operaciones por día exceden las {int(np.max(perday))} barras diarias disponibles (cota teórica sin posiciones superpuestas).")
     cap=cfg.get("capital") or {}
     riskrules=cap.get("risk_rules") or {}
@@ -69,8 +71,6 @@ def preflight(frame, cfg):
         warnings.append("Trailing avanzado tiene prioridad sobre el básico; desactiva uno para simplificar.")
     if funding.get("enabled") and (funding.get("daily_loss_pct")!=cfg.get("prop_daily_pct") or funding.get("total_loss_pct")!=cfg.get("prop_max_pct")):
         warnings.append("Gestión de capital usa límites operativos; Fondeo simula límites de evaluación diferentes. Ambos pueden coexistir, pero se aplican en etapas distintas.")
-    if cfg.get("rr") is not None or cfg.get("atr_multiplier") is not None:
-        warnings.append("Los campos heredados 'rr' y 'atr_multiplier' no controlan el motor actual. La salida se configura exclusivamente en Gestión de capital y Avanzado.")
     return {"dataset_id":cfg.get("dataset_id"),"timeframes":info,
             "warnings":warnings,"historical_only":True,
             "message":"Percentiles históricos observados, no predicciones ni límites matemáticos garantizados. Se usa el CSV aportado."}
