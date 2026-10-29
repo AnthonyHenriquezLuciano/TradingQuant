@@ -52,7 +52,8 @@ class PrivateResearchMiddleware(BaseHTTPMiddleware):
                 # Account selection is not a secret/token. It identifies the
                 # authenticated MT5 terminal currently attached to this PC.
                 account_id=request.headers.get("x-tradingquant-account","")
-                MT5.ensure_active(account_id)
+                if not account_id or account_id!=MT5.active_id:
+                    return JSONResponse({"detail":"Conecta una cuenta MT5 en Principal → Cuentas antes de acceder al laboratorio."},status_code=403)
         return await call_next(request)
 
 # Register security before CORS so preflight and all error responses keep
