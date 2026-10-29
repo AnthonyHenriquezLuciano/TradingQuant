@@ -143,3 +143,24 @@ def test_run_advanced_exports_entry_variant(entry):
     ))
     assert result["tested"]<=10
     assert all(c["entry_mode"]==entry for c in result["candidates"])
+
+
+def test_pending_stop_and_stoploss_same_candle_assumes_loss():
+    m=market()
+    m[0][41]=1
+    m[2][42]=103.         # triggers buy-stop
+    m[3][42]=98.          # also spans stop; unknown chronology => worst case
+    r,_=run(m,entry="stop")
+    assert r.tolist()==pytest.approx([-1.])
+
+
+def test_dca_and_pyramid_both_enabled_preserves_global_risk_cap():
+    m=market()
+    m[0][41]=1
+    m[2][43]=101.
+    m[3][43]=99.4         # both ladders hit in one ambiguous bar
+    m[3][44]=98.
+    r,_=run(m,dca_enabled=True,dca_levels=3,dca_spacing=.5,
+            pyramid_enabled=True,pyramid_levels=3,pyramid_spacing=.5)
+    assert len(r)==1
+    assert -1.000001<=r[0]<=0
