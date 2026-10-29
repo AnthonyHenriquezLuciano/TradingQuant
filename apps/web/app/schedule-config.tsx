@@ -32,8 +32,13 @@ const RULES=[
  {id:"avoid_monday_open",title:"No operar apertura del lunes",desc:"No abrir nuevas posiciones el lunes hasta las 01:00 UTC."},
  {id:"avoid_rollover",title:"Evitar hora de rollover",desc:"Bloquear nuevas entradas entre 20:55 y 21:10 UTC, también al cruzar de día."},
 ] as const;
-type Props={value:ScheduleSettings;onChange:(v:ScheduleSettings)=>void};
-export function ScheduleConfig({value,onChange}:Props){
+type Props={value:ScheduleSettings;onChange:(v:ScheduleSettings)=>void;sourceTimezone:string;onTimezone:(tz:string)=>void};
+const SOURCE_ZONES=[
+ ["UTC","UTC"],["Europe/London","Europe/London"],["Europe/Athens","Europe/Athens (UTC+2/+3)"],
+ ["America/New_York","America/New_York"],["America/Santo_Domingo","America/Santo_Domingo"],
+ ["Asia/Tokyo","Asia/Tokyo"]
+];
+export function ScheduleConfig({value,onChange,sourceTimezone,onTimezone}:Props){
  const c={...DEFAULT_SCHEDULE,...value};const [details,setDetails]=useState(true);
  const selected:SessionKey[]=c.sessions?.length?c.sessions:["all_day"];
  function choose(id:SessionKey){
@@ -54,6 +59,7 @@ export function ScheduleConfig({value,onChange}:Props){
     </div></div>)}
    <div className="tq-timeline-foot"><span>00:00</span><span>UTC · 24 horas</span><span>24:00</span></div>
   </div>
+  <label className="tq-hours-timezone">Zona horaria del archivo CSV <select value={sourceTimezone} onChange={e=>onTimezone(e.target.value)}>{SOURCE_ZONES.map(([id,name])=><option value={id} key={id}>{name}</option>)}</select></label>
   <div className="tq-hours-notice"><Info size={16}/><p>La cuadrícula sigue <strong>ventanas fijas en UTC</strong>, tal como se muestran, sin desplazarlas automáticamente por el horario de verano de Londres o Nueva York. El motor convierte la zona horaria original del CSV a UTC antes de aplicar estos intervalos. Una sesión seleccionada limita las entradas, pero no cierra operaciones ya abiertas por sí sola.</p></div>
   <div className="tq-hours-restrictions">
    <button className="tq-hours-sectionhead" onClick={()=>setDetails(x=>!x)} aria-expanded={details}><span><ShieldCheck size={17}/> Reglas de cierre y restricciones</span><small>{RULES.filter(r=>c[r.id]).length} activas</small><ChevronDown size={17} className={details?"rotated":""}/></button>
