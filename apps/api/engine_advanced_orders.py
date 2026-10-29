@@ -296,6 +296,11 @@ def simulate_advanced_orders(
                 avg=sum_entry_qty/max(total_qty,1e-15)
                 if tp_from_average and (dca_count>1 or pyramid_count>1):
                     take=avg+side*initial_take_dist
+                    # SL may follow the average ONLY when this tightens risk.
+                    # Moving SL adversely would violate the reserved global budget.
+                    proposed=avg-side*initial_dist
+                    if (proposed-stop)*side>0:
+                        stop=proposed
 
         # Complete bar values are only used to update stop for the NEXT bar.
         observed=op[i] if modeling==0 else cl[i]
