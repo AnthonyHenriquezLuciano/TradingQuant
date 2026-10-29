@@ -152,3 +152,18 @@ Se incorporaron cuatro pestañas adicionales al laboratorio de algoritmos, con c
 
 #### Limitaciones comunes
 Todas las operaciones siguen el simulador OHLC actual. No se afirma que datos sintéticos, DSR, WFE, IS/OOS, o una estimación de coste puedan sustituir forward testing, ticks reales, microestructura, disponibilidad de liquidez, especificaciones actuales de broker o drawdown flotante. En el frontend Vercel, el configurador y las vistas funcionan, pero la API Python FastAPI aún requiere un despliegue público y conexión antes de poder iniciar simulaciones científicas desde la web.
+
+
+### Nueva exploración real, diagnóstico ATR y panel de resultados auditables
+
+FastAPI incorpora POST /api/explorations/preflight, POST /api/explorations/start, GET /api/explorations/jobs/{id} y GET /api/explorations/jobs/{id}/result. El diagnóstico preflight obtiene P5/P25/mediana/P75/P95 del ATR(14) desde el CSV y el periodo seleccionados, además de muestras de frecuencia de señales por día. Los resultados son descriptivos y NO límites universales del indicador. Informa cuando dos límites pueden ser redundantes o cuando la muestra indica un máximo diario de señales por debajo del límite configurado.
+
+El motor ejecuta una cola de un worker con hasta dos trabajos activos o pendientes, informando fase, progreso, número evaluado y tiempo transcurrido directamente desde el cálculo real. Una ejecución terminada devuelve hasta 50 estrategias con score IS, evaluación OOS y trazas generadas por el mismo motor Numba utilizado en el backtest. El nuevo detalle muestra precios y tiempos reales de entrada y salida, R por operación, balance OOS, curva equity, OHLC histórico, costes agregados, rendimiento mensual, calendario, ranking filtrable y simulación de fondeo por fases. El botón Guardar en Mis Algoritmos queda deshabilitado (Próximamente).
+
+Los resultados del navegador se almacenan en IndexedDB, evitando exceder fácilmente la cuota limitada de localStorage. No hay sincronización entre equipos ni guardado central por usuario. Los trabajos y su cola permanecen en memoria de un único proceso Python y se perderían al reiniciarse; falta cola duradera para alta disponibilidad.
+
+Se eliminaron controles duplicados e inertes de ratio TP/SL, ATR, riesgo y DD de la sección Configuración. Gestión de capital concentra el riesgo operativo, sizing y SL/TP; Avanzado modifica su comportamiento; Costes gestiona coste genérico y catálogo; Fondeo simula las evaluaciones de cuentas y Filtro establece umbrales de aceptación independientes de las reglas de ejecución. Sólo los indicadores marcados como habilitados tienen motor de señales; el resto del catálogo técnico y las series macro son futuribles.
+
+El Dockerfile del motor se incluye en apps/api/Dockerfile y docker-compose.yml crea un volumen de CSV y Numba, con puerto enlazado a localhost para evitar una API abierta sin autenticación. Para conectar Vercel se requiere un host persistente HTTPS para FastAPI, configurar TRADINGQUANT_CORS_ORIGINS y la variable NEXT_PUBLIC_API_URL apuntando a dicho host. La web publicada no puede ejecutar las simulaciones si no existe ese backend público. La sincronización MT5 sigue sin implementarse.
+
+Alcance: los resultados son OHLC u open-bar, no ejecución tick real; tampoco hay garantía de rentabilidad ni equivalencia total a StrategyQuant. La evaluación histórica OOS, el bootstrap, las ventanas Walk-Forward y Multiverso son pruebas experimentales y deben contrastarse con forward testing.
