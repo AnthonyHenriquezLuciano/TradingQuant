@@ -53,8 +53,9 @@ def time_arrays(frame:pl.DataFrame,source_timezone:str,schedule:dict|None):
             ).dt.convert_time_zone("UTC").alias("utc")
         )["utc"]
         utc=pl.DataFrame({"ts":ts})
-        minute=(utc["ts"].dt.hour().to_numpy()*60+
-                utc["ts"].dt.minute().to_numpy()).astype(np.int32)
+        # Polars hour/minute can be uint8. Cast BEFORE multiplying to avoid 256 overflow.
+        minute=(utc["ts"].dt.hour().to_numpy().astype(np.int32)*60+
+                utc["ts"].dt.minute().to_numpy().astype(np.int32))
         weekday=utc["ts"].dt.weekday().to_numpy().astype(np.int32)-1
         # ISO week and calendar month identifiers for realized risk limits
         weeks=utc["ts"].dt.strftime("%G%V").cast(pl.Int32).to_numpy()
