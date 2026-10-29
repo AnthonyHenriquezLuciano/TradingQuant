@@ -92,3 +92,17 @@ La cuarta pestaña **Horarios** incluye 24 horas, Sydney, Tokio, Londres, Nueva 
 Se aplican filtros de apertura para ventanas seleccionadas, viernes, primera hora del lunes y rollover 20:55–21:10 UTC, además de cierres forzados desde las 20:00 UTC diariamente (si se activa NY close) y desde las 19:00 UTC del viernes (si se activa cierre semanal). Un cierre forzado se ejecuta en la **primera apertura disponible** desde el corte, no se inventan cotizaciones. La selección de una sesión, por sí sola, **no** liquida posiciones fuera de su horario.
 
 La pestaña **Gestión de capital** permite seleccionar límites de beneficios y pérdidas realizados diarios, semanales, mensuales y acumulados de cuenta; umbrales de rachas de wins/losses; ratio mínimo recompensa/riesgo; riesgo por trade y operaciones máximas al día. Los límites de racha detienen nuevas entradas hasta la jornada siguiente. Los límites se calculan con saldo realizado y se reinician en cortes UTC diarios/semanales/mensuales, salvo límites acumulados de cuenta. No son un sustituto de las reglas exactas de equity flotante o drawdown intradía de FundingPips ni otras firmas. Los límites se evalúan en entrenamiento y fuera de muestra.
+
+
+### Objetivo de optimización del Creador de Algoritmos
+
+En **Configuración → Objetivo de optimización** puedes seleccionar entre 11 métricas: balanced, sharpe, sortino, calmar, net_profit, min_drawdown, profit_factor, expectancy, win_rate, recovery_factor y funding_pass_rate.
+
+**Todas** las métricas afectan la puntuación con la que el motor aleatorio clasifica candidatos y el motor genético selecciona población y élites. La puntuación se calcula únicamente en **IS** y no se escoge con resultados OOS. Las estrategias devueltas conservan su puntuación y métricas IS, y se ordenan por esa puntuación.
+
+- **Balanceado:** 2 × Sharpe − 1.5 × max(0, DD% − 30) + bonificación si PF > 1.5, limitada a cinco unidades.
+- **Sharpe, Sortino, Calmar:** anualización convencional de 252 jornadas; los retornos diarios se estiman a partir de *cierres realizados*, incluyendo jornadas observadas sin cierre de operaciones. No son métricas diarias mark-to-market.
+- **PnL:** USD finales menos depósito inicial. **Drawdown:** negativo del porcentaje máximo de reducción en balance realizado. **Profit Factor:** beneficios brutos realizados sobre pérdidas brutas (valor finito de protección cuando no existen pérdidas). **Expectancy:** PnL medio USD por trade. **Win rate:** porcentaje de trades ganadores. **Recovery factor:** PnL dividido por el descenso absoluto máximo del balance en USD.
+- **Pass Rate Fondeo:** proxy de tasa de aprobación de evaluación de dos fases (metas 8% y 5%). En cada fase remuestrea 128 trayectorias de jornadas IS durante un máximo de 60 jornadas, con límites de pérdidas diarias y totales realizados configurados en la sesión; no exige mínimo de días. El cálculo **no reproduce** pérdidas flotantes, ejecución intrabar real, márgenes, reglas especiales de fondeadoras, calendarios futuros ni dependencia temporal real de retornos. Esta estimación no se debe presentar como una probabilidad verdadera de aprobar una cuenta de fondeo.
+
+Los candidatos con menos operaciones IS que el mínimo configurado reciben una penalización de selección. Cada objetivo y valor aparece en el objeto de resultados junto con las métricas de validación OOS.
