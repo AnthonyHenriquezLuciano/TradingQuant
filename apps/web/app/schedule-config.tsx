@@ -35,7 +35,7 @@ const RULES=[
 type Props={value:ScheduleSettings;onChange:(v:ScheduleSettings)=>void};
 export function ScheduleConfig({value,onChange}:Props){
  const c={...DEFAULT_SCHEDULE,...value};const [details,setDetails]=useState(true);
- const selected=c.sessions?.length?c.sessions:["all_day"];
+ const selected:SessionKey[]=c.sessions?.length?c.sessions:["all_day"];
  function choose(id:SessionKey){
   if(id==="all_day"){onChange({...c,sessions:["all_day"]});return;}
   const current=selected.filter(s=>s!=="all_day");
