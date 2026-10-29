@@ -25,6 +25,7 @@ export const DEFAULT_FUNDING:FundingSettings={
 const phase=(target:number,minimum:number,dayProfit=0):FundingPhase=>({
  target_pct:target,max_days:120,min_days:minimum,min_profit_day_pct:dayProfit
 });
+const phase=(target:number,min_days:number,min_profit_day_pct=0):FundingPhase=>({target_pct:target,max_days:120,min_days,min_profit_day_pct});
 type Preset={id:string;name:string;notice:string;kind:"verified"|"template";update:Partial<FundingSettings>};
 const PRESETS:Preset[]=[
  {id:"ftmo",name:"FTMO 2-Step",kind:"verified",notice:"FTMO 2-Step (10% / 5%, DD 5% diario y 10% total, 4 días): verificar condiciones vigentes y horario CE(S)T.",update:{phases:[phase(10,4),phase(5,4)],daily_loss_pct:5,total_loss_pct:10,total_loss_mode:"static",daily_loss_basis:"previous_close"}},
