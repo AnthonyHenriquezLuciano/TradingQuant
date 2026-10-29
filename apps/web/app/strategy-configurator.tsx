@@ -18,6 +18,7 @@ import {CostsConfig,DEFAULT_COSTS,type CostSettings} from "./costs-config";
 import {DatasetDiagnostics,type AssetDiagnostics} from "./dataset-diagnostics";
 
 export type IndicatorRanges = {
+ tech_period_min:number;tech_period_step:number;tech_period_max:number;
  ema_fast_min:number;ema_fast_step:number;ema_fast_max:number;
  ema_slow_min:number;ema_slow_step:number;ema_slow_max:number;
  rsi_period_min:number;rsi_period_step:number;rsi_period_max:number;
