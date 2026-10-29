@@ -248,7 +248,7 @@ class MT5Bridge:
                 raise HTTPException(422,"Temporalidad no compatible.")
             if p.end<=p.start or (p.end-p.start).days>365*15:
                 raise HTTPException(422,"Selecciona un rango de fechas válido (máximo 15 años).")
-            if not re.fullmatch(r"[\w.+#-]{1,90}",p.symbol):
+            if not re.fullmatch(r"[^\x00-\x1f/\\]{1,90}",p.symbol):
                 raise HTTPException(422,"Nombre de símbolo no admitido.")
             spec=mt5.symbol_info(p.symbol)
             if spec is None:
@@ -264,6 +264,13 @@ class MT5Bridge:
             rates=mt5.copy_rates_range(p.symbol,period,start,end)
             if rates is None or len(rates)<300:
                 raise HTTPException(422,"MT5 no devolvió 300 velas completas. Revisa fechas, Max. bars in chart y carga el histórico del símbolo en MT5.")
+            # Exclude the currently forming last bar; never run research on it.
+            timeframe_seconds={"1m":60,"5m":300,"15m":900,"30m":1800,"1h":3600,"4h":14400,"1d":86400}[p.timeframe]
+            now_utc=datetime.now(timezone.utc)
+            last_closed_start=int(now_utc.timestamp())//timeframe_seconds*timeframe_seconds
+            rates=rates[rates["time"]<last_closed_start]
+            if len(rates)<300:
+                raise HTTPException(422,"No hay 300 velas MT5 cerradas en el rango seleccionado.")
             if len(rates)>5_000_000:
                 raise HTTPException(413,"Más de cinco millones de velas; divide el período.")
             uid=str(uuid.uuid4())
