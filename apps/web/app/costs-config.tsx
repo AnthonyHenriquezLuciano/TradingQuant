@@ -19,8 +19,8 @@ export const BASE_COSTS:CostRow[]=[
  {symbol:"USDCAD",spread_pips:1.5,commission_roundtrip_usd:7,slippage_pips:.3,swap_long_usd:0,swap_short_usd:0,pip_size:.0001,contract_size:100000,quote_to_usd:.73,hold_days_estimate:0}
 ];
 export const DEFAULT_COSTS:CostSettings={template:"generic",auto_mt5:false,selected_symbol:"XAUUSD",use_in_backtest:false,instruments:BASE_COSTS};
-type Props={value:CostSettings;onChange:(next:CostSettings)=>void;symbol:string;fallbackBps:number};
-export function CostsConfig({value,onChange,symbol,fallbackBps}:Props){
+type Props={value:CostSettings;onChange:(next:CostSettings)=>void;symbol:string;fallbackBps:number;onFallbackChange:(next:number)=>void};
+export function CostsConfig({value,onChange,symbol,fallbackBps,onFallbackChange}:Props){
  const c={...DEFAULT_COSTS,...value};
  const [editing,setEditing]=useState(false);
  const [showHelp,setShowHelp]=useState(false);
@@ -42,6 +42,7 @@ export function CostsConfig({value,onChange,symbol,fallbackBps}:Props){
    </div>
    {showHelp&&<p className="tq-research-note">Los valores de ejemplo no representan cotizaciones reales ni condiciones del broker. Para calcular correctamente el coste, ingresa tamaño de pip, contrato y conversión de moneda de cotización a USD. Swap se aproxima por duración media; no reproduce triples swaps ni cambios de tarifa.</p>}
    <div className="tq-research-note"><WifiOff size={16}/> <strong>Sin conexión MT5.</strong> Sincronización automática de especificaciones, spread, comisiones, swap y cotización: <strong>Próximamente.</strong></div>
+   <label className="tq-adv-field tq-cost-fallback"><span>Coste genérico round-trip, cuando catálogo está desactivado (bps)</span><input type="number" min={0} max={100} step={.1} value={fallbackBps} onChange={e=>onFallbackChange(Math.max(0,Math.min(100,Number(e.target.value))))}/></label>
    <label className="tq-cost-apply"><input type="checkbox" checked={c.use_in_backtest} onChange={e=>set({use_in_backtest:e.target.checked})}/><span>Aplicar el catálogo al backtest. Desactivado: conserva el coste genérico del laboratorio ({fmt(fallbackBps)} bps por operación).</span></label>
    <div className="tq-cost-table-wrap"><table className="tq-cost-table"><thead><tr><th>Instrumento</th><th>Spread (pips)</th><th>Comisión USD / lote ida y vuelta</th><th>Slippage (pips)</th><th>Swap L USD/lote/día</th><th>Swap S USD/lote/día</th><th></th></tr></thead><tbody>
     {rows.map(r=><tr key={r.symbol}><td><strong>{r.symbol}</strong></td>{(["spread_pips","commission_roundtrip_usd","slippage_pips","swap_long_usd","swap_short_usd"] as const).map(k=><td key={k}>{editing?<input type="number" step={.01} min={k.startsWith("swap")?undefined:0} value={r[k]} onChange={e=>update(r.symbol,k,Number(e.target.value))}/>:fmt(r[k])}</td>)}<td>{editing&&<button title={"Eliminar "+r.symbol} onClick={()=>set({template:"custom",instruments:rows.filter(x=>x.symbol!==r.symbol)})}><Trash2 size={15}/></button>}</td></tr>)}
