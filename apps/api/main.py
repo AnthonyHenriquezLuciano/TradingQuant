@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from engine import load_data, describe_data
 from engine_advanced import run_advanced
+from engine_capital import normalize_capital
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -92,6 +93,7 @@ class ExplorationRequest(BaseModel):
     indicator_ranges: IndicatorRanges = Field(default_factory=IndicatorRanges)
     macro_indicators: list[str] = Field(default_factory=list, max_length=200)
     macro_rules: dict[str, dict] = Field(default_factory=dict)
+    capital: dict | None = None
     source_timezone: Literal["UTC","Europe/London","Europe/Athens","America/New_York","America/Santo_Domingo","Asia/Tokyo"] = "UTC"
     direction: Literal["long", "short", "both"] = "both"
     risk_pct: float = Field(default=0.5, ge=0.05, le=2)
@@ -108,6 +110,10 @@ class ExplorationRequest(BaseModel):
     def valid(self):
         if not self.families:
             raise ValueError("Selecciona al menos una familia de señales.")
+        try:
+            normalize_capital({"capital": self.capital, "rr": self.rr, "atr_multiplier": self.atr_multiplier})
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ValueError(str(exc)) from exc
         if self.macro_indicators:
             raise ValueError("Las series macroeconómicas necesitan datos point-in-time antes de ejecutar; aún no están habilitadas.")
         if self.start_date and self.end_date and self.start_date > self.end_date:
