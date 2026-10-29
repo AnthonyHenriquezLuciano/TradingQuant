@@ -65,8 +65,10 @@ def test_trailing_from_completed_bar():
     m[0][41]=1
     m[2][42]=102.5
     m[4][42]=102.
+    m[1][43]=101.5   # bar opens above new trailing stop: no gap-through
     m[2][43]=102.1
     m[3][43]=100.5
+    m[4][43]=101.5
     r,_=simulate(m,tp=5,trailing=True,trailing_atr=1.)
     assert r[0]==pytest.approx(1.)
 
@@ -114,3 +116,16 @@ def test_reject_invalid_exit_range():
 def test_legacy_config_uses_same_single_exit():
     cap=normalize_capital({"rr":1.5,"atr_multiplier":2.})
     assert sample_exit(random.Random(0),cap)==(2.,1.5)
+
+
+def test_gap_through_trailing_stop_fills_at_open_not_stop_price():
+    m=market()
+    m[0][41]=1
+    m[2][42]=102.5
+    m[4][42]=102.
+    # New trailing stop = 101, next opening is 100: do not invent fill at 101.
+    m[1][43]=100.
+    m[2][43]=102.
+    m[3][43]=99.
+    r,_=simulate(m,tp=5,trailing=True,trailing_atr=1.)
+    assert r[0]==pytest.approx(0.)
