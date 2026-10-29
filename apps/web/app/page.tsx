@@ -22,6 +22,7 @@ import {DEFAULT_MULTIVERSE} from "./multiverse-config";
 import {DEFAULT_COSTS} from "./costs-config";
 import {ResearchResults,StrategyDetail} from "./research-results";
 import type {AssetDiagnostics} from "./dataset-diagnostics";
+import {readExperiments,writeExperiments} from "./browser-store";
 
 type View = "home" | "sessions" | "builder" | "datasets" | "results" | "validation" | "running" | "detail";
 type Dataset = { id:string; filename:string; rows:number; start:string; end:string; timeframe:string; uploaded_at:string };
@@ -79,6 +80,7 @@ export default function Page(){
  const [cfg,setCfg]=useState<Config>(DEFAULT);
  const [datasets,setDatasets]=useState<Dataset[]>([]);
  const [runs,setRuns]=useState<RunResult[]>([]);
+ const [runsHydrated,setRunsHydrated]=useState(false);
  const [sessions,setSessions]=useState<AlgoSession<Config>[]>([]);
  const [activeSessionId,setActiveSessionId]=useState<string|null>(null);
  const [sessionsHydrated,setSessionsHydrated]=useState(false);
@@ -97,7 +99,10 @@ export default function Page(){
  const count=runs.reduce((acc,r)=>acc+r.tested,0);
  useEffect(()=>{try{const d=localStorage.getItem("tq_datasets");const r=localStorage.getItem("tq_runs");const c=localStorage.getItem("tq_cfg");const s=localStorage.getItem("tq_sessions_v1");if(d)setDatasets(JSON.parse(d));const previousRuns:RunResult[]=r?JSON.parse(r):[];if(r)setRuns(previousRuns);if(c)setCfg({...DEFAULT,...JSON.parse(c)});if(s){setSessions(JSON.parse(s))}else if(previousRuns.length){setSessions(previousRuns.map(run=>({id:"migrated-"+run.id,name:run.config.name,symbol:run.config.symbol,config:run.config,createdAt:run.created_at,updatedAt:run.created_at,status:"results" as const,runId:run.id,found:run.candidates.length})))}}catch{/* ignore corrupt local draft */}finally{setSessionsHydrated(true)}},[]);
  useEffect(()=>{localStorage.setItem("tq_datasets",JSON.stringify(datasets))},[datasets]);
- useEffect(()=>{localStorage.setItem("tq_runs",JSON.stringify(runs))},[runs]);
+ useEffect(()=>{readExperiments<RunResult>().then(saved=>{
+   if(saved.length)setRuns(saved.sort((a,b)=>b.created_at.localeCompare(a.created_at)));
+ }).catch(()=>{/* localStorage fallback still works */}).finally(()=>setRunsHydrated(true))},[]);
+ useEffect(()=>{if(!runsHydrated)return;writeExperiments(runs).catch(()=>setError("No se pudieron persistir los resultados en IndexedDB. Exporta tu investigación antes de cerrar el navegador."));},[runs,runsHydrated]);
  useEffect(()=>{localStorage.setItem("tq_cfg",JSON.stringify(cfg))},[cfg]);
  useEffect(()=>{if(sessionsHydrated)localStorage.setItem("tq_sessions_v1",JSON.stringify(sessions))},[sessions,sessionsHydrated]);
  useEffect(()=>{if(activeSessionId)setSessions(prev=>prev.map(s=>s.id===activeSessionId?{...s,name:cfg.name,symbol:cfg.symbol,config:cfg,updatedAt:new Date().toISOString()}:s))},[cfg,activeSessionId]);
