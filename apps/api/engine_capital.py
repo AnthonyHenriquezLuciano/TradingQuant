@@ -249,7 +249,7 @@ def simulate_capital(
             roundtrip_cost=entry*cost_bps/10000.
             r=((exit_price-entry)*side-roundtrip_cost)/initial_distance
             outcomes[count]=r
-            trade_days[count]=trade_day
+            trade_days[count]=days[i]  # realized PnL belongs to the EXIT day
             count+=1
             if fixed_sizing:
                 equity=max(0.,equity+r*risk_pct/100.)
