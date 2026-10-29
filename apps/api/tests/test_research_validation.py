@@ -155,3 +155,15 @@ def test_full_multiverse_recomputes_signals_on_synthetic_bars():
         assert report is not None
         assert report.get("universes")==50
         assert report.get("hidden_regimes") is not None
+
+
+def test_maximum_daily_trades_applies_to_worst_day_not_average():
+    # Five trades distributed 3 on day one, 1 each on day 2/3. Mean 1/day
+    # over five observed days but individual day exceeds a cap of 2.
+    r=np.ones(5)
+    exit_days=np.array([1,1,1,2,3],dtype=np.int32)
+    met=summarize(r,exit_days,.5,3,10)
+    q=realized_quality(r,exit_days,np.arange(1,6),.5,"fixed",met)
+    assert q["trades_per_day"]==1.
+    assert q["max_trades_observed_day"]==3
+    assert evaluate_quality(q,{"max_trades_per_day":2})
