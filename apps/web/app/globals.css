@@ -1215,3 +1215,17 @@ html,body{background:#090909;color:#f1eee8}
 .tq-r-track{height:11px;border-radius:9px;background:#3a3020;overflow:hidden}
 .tq-r-track>span{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#8b693e,#e8c98e);transition:width .4s ease}
 @media(max-width:760px){.tq-diagnostics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tq-diagnostics-head{flex-wrap:wrap}}
+
+/* Dedicated backend host selector: no secrets or credentials persist in browser storage. */
+.tq-api-settings{display:flex;flex-direction:column;gap:12px;padding:18px;margin:18px 0;border:1px solid #745a35;background:#19160f;border-radius:12px}
+.tq-api-settings>div:first-child strong{display:flex;align-items:center;gap:9px;color:#e9d4ac;font-size:13px}
+.tq-api-settings p{font-size:11px;line-height:1.6;color:#bca889;margin:7px 0 0}
+.tq-api-settings>small{font-size:10px;color:#967f62}
+.tq-api-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.tq-api-controls input{flex:1;min-width:230px;max-width:650px;border:1px solid #675032;background:#0e0d0a;border-radius:8px;padding:11px;color:#ecd1a3;font-size:11px}
+.tq-api-controls .btn{white-space:nowrap}
+.tq-api-pill{display:inline-flex;border:1px solid #6b5336;border-radius:30px;padding:5px 10px;color:#b9a488;font-size:10px}
+.tq-api-pill.online{border-color:#26664b;color:#7ad9aa;background:#15291f}
+.tq-api-pill.offline{border-color:#7b3931;color:#f09b89;background:#291a16}
+.tq-api-pill.checking{border-color:#84612e;color:#e6c27f}
+@media(max-width:680px){.tq-api-controls input{width:100%;max-width:none;flex:0 0 100%}}
