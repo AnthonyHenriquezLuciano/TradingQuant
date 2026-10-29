@@ -6,7 +6,7 @@ export type QualitySettings={
  max_trades_per_day:number;
 };
 export const DEFAULT_QUALITY:QualitySettings={
- min_sharpe:0,max_drawdown_pct:100,min_win_rate_pct:0,min_dsr:0,
+ min_sharpe:1.2,max_drawdown_pct:15,min_win_rate_pct:50,min_dsr:0,
  min_trades:0,min_frequency_unit:"auto",max_trades_per_day:0
 };
 type Props={value:QualitySettings;onChange:(v:QualitySettings)=>void};
