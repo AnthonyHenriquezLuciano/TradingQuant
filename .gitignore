@@ -12,5 +12,6 @@ data/uploads/
 *.db
 .venv/
 apps/api/data/numba/
+apps/api/data/inbox/
 *.log
 .DS_Store
