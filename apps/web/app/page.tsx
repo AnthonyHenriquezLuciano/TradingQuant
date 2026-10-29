@@ -7,7 +7,7 @@ import {
  FlaskConical, FolderOpen, GitBranch, LayoutDashboard, Layers3, Menu,
  Microscope, Play, Plus, SearchCheck, Settings2, Shield, ShieldCheck, Info,
  SlidersHorizontal, Sparkles, Target, TerminalSquare, TrendingUp, UploadCloud,
- WandSparkles, X, Zap, AlertTriangle, LoaderCircle, ExternalLink, FileSpreadsheet
+ WandSparkles, Wallet, X, Zap, AlertTriangle, LoaderCircle, ExternalLink, FileSpreadsheet
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SessionOverview, type AlgoSession } from "./session-overview";
