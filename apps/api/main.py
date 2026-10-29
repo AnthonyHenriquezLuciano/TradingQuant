@@ -17,6 +17,7 @@ from engine_schedule import validate_schedule
 from optimization_objectives import OBJECTIVES
 from funding_simulator import validate_funding
 from advanced_modifiers import validate_advanced
+from research_validation import validate_quality,validate_walkforward,validate_multiverse,validate_costs
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -102,6 +103,10 @@ class ExplorationRequest(BaseModel):
     schedule: dict | None = None
     funding: dict | None = None
     advanced_modifiers: dict | None = None
+    quality: dict | None = None
+    walk_forward: dict | None = None
+    multiverse: dict | None = None
+    costs: dict | None = None
     source_timezone: Literal["UTC","Europe/London","Europe/Athens","America/New_York","America/Santo_Domingo","Asia/Tokyo"] = "UTC"
     direction: Literal["long", "short", "both"] = "both"
     risk_pct: float = Field(default=0.5, ge=0.05, le=2)
@@ -124,6 +129,10 @@ class ExplorationRequest(BaseModel):
             validate_schedule(self.schedule)
             validate_funding(self.funding)
             validate_advanced(self.advanced_modifiers)
+            validate_quality(self.quality)
+            validate_walkforward(self.walk_forward)
+            validate_multiverse(self.multiverse)
+            validate_costs(self.costs)
         except (TypeError, ValueError, KeyError) as exc:
             raise ValueError(str(exc)) from exc
         if self.macro_indicators:
