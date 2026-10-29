@@ -378,8 +378,10 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
         }
         seen: set[tuple] = set()
         evaluated: list[dict] = []
+        processed_count=0
 
         def assess(gene: tuple[int,int,int], side: int, pair: tuple[float,float]) -> dict | None:
+            nonlocal processed_count
             entry_variant=ENTRY_CODES[rng.choice(modifiers["entry_modes"])]
             key = (*gene, side, *pair, entry_variant)
             if key in seen:
@@ -413,6 +415,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
             )
             if metrics_is["trades"] < max(4,cfg["min_trades"]):
                 score = -1e8 + metrics_is["trades"]
+            processed_count+=1
+            if on_progress is not None and processed_count%4==0:
+                on_progress(len(all_trials)+processed_count,budget,"explorando")
             return dict(
                 gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),signals=signals,in_sample=metrics_is,
                 reference_cost_price=cost_reference,
