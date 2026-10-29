@@ -72,12 +72,11 @@ export const OPTIMIZATION_OPTIONS:{id:OptimizationObjective;name:string;descript
 
 type Dataset={id:string;filename:string;rows:number;start:string;end:string;timeframe:string;uploaded_at:string};
 type Props={
- config:AlgoConfig;datasetList:Dataset[];loading:boolean;profile:AssetDiagnostics|null;analyzing:boolean;onAnalyze:()=>void;
+ config:AlgoConfig;datasetList:Dataset[];availableSymbols:{name:string;description:string}[];accountLabel:string;importingMT5:boolean;onImportMT5:()=>void;loading:boolean;profile:AssetDiagnostics|null;analyzing:boolean;onAnalyze:()=>void;
  onChange:<K extends keyof AlgoConfig>(key:K,value:AlgoConfig[K])=>void;
  onUpload:()=>void;onExecute:()=>void;onBack:()=>void;
 };
 const TF=[["1m","M1"],["5m","M5"],["15m","M15"],["30m","M30"],["1h","H1"],["4h","H4"],["1d","D1"]] as const;
-const SYMBOLS=["XAUUSD","NAS100","US30","SPX500","EURUSD","GBPUSD","USDJPY","USDCAD","AUDUSD","NZDUSD","BTCUSD","ETHUSD","OTRO"];
 const DEPOSITS=[1000,2000,5000,10000,25000,50000,100000];
 const HELP:Record<string,string>={
  symbol:"Selecciona el instrumento que corresponde al histórico que vas a investigar.",
@@ -100,7 +99,7 @@ function Row({label,id,children,active,toggle}:{label:string;id:string;children:
  return <div className="tq-one-row"><div className="tq-one-label"><label htmlFor={"tq-"+id}>{label}:</label></div><div className="tq-one-value">{children}</div><Hint id={id} active={active} toggle={toggle}/></div>;
 }
 
-export function StrategyConfigurator({config:c,datasetList,loading,profile,analyzing,onAnalyze,onChange,onUpload,onExecute,onBack}:Props){
+export function StrategyConfigurator({config:c,datasetList,availableSymbols,accountLabel,importingMT5,onImportMT5,loading,profile,analyzing,onAnalyze,onChange,onUpload,onExecute,onBack}:Props){
  const [help,setHelp]=useState<string|null>(null);
  const [activeTab,setActiveTab]=useState<"config"|"indicators"|"capital"|"schedule"|"funding"|"advanced"|"quality"|"walk_forward"|"multiverse"|"costs">("config");
  const [advanced,setAdvanced]=useState(false);
@@ -188,7 +187,8 @@ export function StrategyConfigurator({config:c,datasetList,loading,profile,analy
   {activeTab==="config"?<div className="tq-one-panel">
    <div className="tq-one-panel-header"><div className="tq-one-header-icon"><SlidersHorizontal size={19}/></div><div><strong>Parámetros de la sesión</strong><span>Mercado, ejecución y descubrimiento de estrategias</span></div><span className="tq-one-header-tag">RESEARCH MODE</span></div>
    <div className="tq-one-form">
-    <Row id="symbol" label="Símbolo" active={help} toggle={setHelp}><select id="tq-symbol" value={c.symbol} onChange={e=>update("symbol",e.target.value)}><option value="">Seleccionar instrumentos...</option>{SYMBOLS.map(s=><option value={s} key={s}>{s}</option>)}</select></Row>
+    <Row id="symbol" label="Símbolo" active={help} toggle={setHelp}><select id="tq-symbol" value={c.symbol} onChange={e=>update("symbol",e.target.value)}><option value="">Seleccionar instrumentos...</option>{availableSymbols.map(s=><option value={s.name} key={s.name}>{s.name}{s.description?" · "+s.description:""}</option>)}</select></Row>
+    <div className="tq-mt5-import-inline"><div><strong>Histórico oficial del terminal MT5</strong><small>{accountLabel} · {availableSymbols.length} símbolos del bróker · período seleccionado arriba (si no se define: últimos 90 días)</small></div><button type="button" className="btn btn-outline btn-small" disabled={!c.symbol||importingMT5} onClick={onImportMT5}>{importingMT5?"Extrayendo MT5…":"Importar velas desde MT5"}</button></div>
     <Row id="timeframe" label="Intervalo" active={help} toggle={setHelp}><div className="tq-one-intervals">{TF.map(([key,name])=><button key={key} aria-pressed={tfs.includes(key)} type="button" className={tfs.includes(key)?"active":""} onClick={()=>chooseTF(key)}>{tfs.includes(key)&&<span className="tq-interval-dot"/>}{name}</button>)}</div></Row>
     <Row id="period" label="Periodo" active={help} toggle={setHelp}><div className="tq-one-date-range"><input aria-label="Desde" id="tq-period" type="date" value={c.start_date||""} max={c.end_date||undefined} onChange={e=>update("start_date",e.target.value)}/><span>→</span><input aria-label="Hasta" type="date" value={c.end_date||""} min={c.start_date||undefined} onChange={e=>update("end_date",e.target.value)}/></div></Row>
     <Row id="deposit" label="Depósito inicial" active={help} toggle={setHelp}><div className="tq-one-deposit"><select id="tq-deposit" aria-label="Depósito inicial" value={!customDeposit&&DEPOSITS.includes(c.initial_deposit)?String(c.initial_deposit):"custom"} onChange={e=>{if(e.target.value==="custom"){setCustomDeposit(true)}else{setCustomDeposit(false);update("initial_deposit",Number(e.target.value))}}}>{DEPOSITS.map(n=><option value={String(n)} key={n}>{new Intl.NumberFormat("en-US").format(n)}</option>)}<option value="custom">Otro importe...</option></select>{(customDeposit||!DEPOSITS.includes(c.initial_deposit))&&<input type="number" aria-label="Importe personalizado" min={100} max={100000000} step={100} value={c.initial_deposit} onChange={e=>update("initial_deposit",Math.max(100,Math.min(100000000,Number(e.target.value)||100)))}/>}<span>USD</span></div></Row>
