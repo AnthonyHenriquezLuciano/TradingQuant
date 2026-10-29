@@ -28,7 +28,7 @@ def load_data(path: Path) -> pl.DataFrame:
     # CSV but must not consume Polars memory during candle calculations.
     import csv
     header=next(csv.reader([first],delimiter=delimiter))
-    normalized={col:col.lstrip("\\ufeff").strip().strip("<>").lower().replace(" ","_") for col in header}
+    normalized={col:col.lstrip("\ufeff").strip().strip("<>").lower().replace(" ","_") for col in header}
     required=["open","high","low","close"]
     for key in ("timestamp","datetime","date","time"):
         if key in normalized.values():
