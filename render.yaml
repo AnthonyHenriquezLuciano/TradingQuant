@@ -1,0 +1,24 @@
+# TradingQuant scientific API — paid persistent deployment.
+# Creating this Blueprint requires review of the Render compute/disk charges.
+# Docker service: single instance, because the research queue is process-local.
+services:
+  - type: web
+    name: tradingquant-scientific-api
+    runtime: docker
+    plan: 1c-2g
+    region: virginia
+    numInstances: 1
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    healthCheckPath: /health
+    envVars:
+      - key: TRADINGQUANT_DATA_DIR
+        value: /data/uploads
+      - key: NUMBA_CACHE_DIR
+        value: /data/numba
+      - key: TRADINGQUANT_CORS_ORIGINS
+        value: https://tradingquant-beta.vercel.app,https://tradingquant-xauusd-portafolio.vercel.app,http://localhost:3000
+    disk:
+      name: tradingquant-research-storage
+      mountPath: /data
+      sizeGB: 5
