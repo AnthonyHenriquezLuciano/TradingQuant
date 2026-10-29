@@ -1083,3 +1083,12 @@ html,body{background:#090909;color:#f1eee8}
 .tq-cost-warning{font-size:11px;color:#e9ae90;border:1px solid #8b533d;background:#291b15;padding:12px;border-radius:8px;margin-top:15px}
 @media(max-width:750px){.tq-research{padding:15px}.tq-research-card{padding:14px}.tq-research-options,.tq-quality-frequency{grid-template-columns:1fr}.tq-research-fields{grid-template-columns:1fr 1fr}.tq-cost-header>label{width:100%}}
 @media(max-width:470px){.tq-research-fields{grid-template-columns:1fr}.tq-cost-header select{min-width:0;width:100%}.tq-research-intro h2{font-size:19px}}
+
+
+/* Laboratory tabs: ten compact pages fit without horizontal clipping. */
+.tq-config-tabbar{flex-wrap:wrap;align-items:stretch;row-gap:7px;column-gap:7px}
+.tq-config-tabbar>button{padding:0 12px;min-height:37px;flex:0 1 auto;white-space:nowrap;font-size:11px}
+.tq-config-tabbar>button svg{flex-shrink:0}
+@media(max-width:760px){.tq-config-tabbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.tq-config-tabbar>button{padding:8px;white-space:normal;justify-content:flex-start;font-size:10px;min-height:39px}}
+@media(max-width:380px){.tq-config-tabbar{grid-template-columns:repeat(2,minmax(0,1fr))}.tq-config-tabbar>button{gap:6px;font-size:9px}}
