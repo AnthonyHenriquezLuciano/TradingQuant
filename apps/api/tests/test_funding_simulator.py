@@ -51,7 +51,7 @@ def test_daily_reference_modes():
 
 def test_trailing_eod_and_lock_at_initial():
     phase={"target_pct":50,"max_days":3,"min_days":0,"min_profit_day_pct":0}
-    daily=np.array([.15,-.11,0])
+    daily=np.array([.15,-.15,0])  # breached the locked-at-initial trailing floor
     trailing=conf(phases=[phase],daily_loss_pct=0,total_loss_pct=10,total_loss_mode="trailing_eod",trailing_lock_initial=True)
     static=conf(phases=[phase],daily_loss_pct=0,total_loss_pct=10,total_loss_mode="static")
     assert _run_phase(daily,np.ones(3,dtype=bool),phase,trailing)[0]=="breached"
