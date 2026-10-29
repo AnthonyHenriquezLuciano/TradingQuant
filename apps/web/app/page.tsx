@@ -47,7 +47,7 @@ type Candidate = {
 type Metrics = { trades:number; win_rate:number; profit_factor:number|null; expectancy_r:number; max_drawdown_pct:number; net_return_pct:number; daily_breached:boolean; total_breached:boolean };
 type RunResult = { id:string; created_at:string; dataset_id:string; tested:number; accepted:number; candidates:Candidate[]; warnings:string[]; config:Config };
 type Config = AlgoConfig;
-const DEFAULT_API=process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV==="development"?"http://localhost:8000":"");
+const DEFAULT_API="http://127.0.0.1:8000"; // Local engine only; never connects to Render
 const DEFAULT:Config={ name:"Nueva exploración cuantitativa",dataset_id:"",symbol:"XAUUSD",timeframe:"5m",timeframes:["5m"],start_date:"",end_date:"",initial_deposit:5000,mode:"random",optimization_objective:"balanced",modeling:"ohlc",sizing:"compound",multi_tf:"individual",generations:8,candidates:100,families:["ema_cross","rsi_reversion","breakout"],indicator_ranges:DEFAULT_INDICATOR_RANGES,source_timezone:"UTC",macro_indicators:[],macro_rules:{},capital:DEFAULT_CAPITAL,schedule:DEFAULT_SCHEDULE,funding:DEFAULT_FUNDING,advanced_modifiers:DEFAULT_ADVANCED,quality:DEFAULT_QUALITY,walk_forward:DEFAULT_WALK_FORWARD,multiverse:DEFAULT_MULTIVERSE,costs:DEFAULT_COSTS,direction:"both",risk_pct:0.5,rr:1.0,atr_multiplier:1.5,cost_bps:2,is_ratio:70,min_trades:12,mc_iterations:500,prop_daily_pct:3,prop_max_pct:10 };
 const STEPS=[{title:"Mercado y datos",sub:"Fuente y búsqueda"},{title:"Señales",sub:"Hipótesis y reglas"},{title:"Ejecución",sub:"Riesgo y costes"},{title:"Validación",sub:"Pruebas y filtros"}];
 const formatDate=(value:string)=>{const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleDateString("es-DO",{day:"2-digit",month:"short",year:"numeric"})};
@@ -90,14 +90,10 @@ export default function Page(){
  const [uploadProgress,setUploadProgress]=useState<{percent:number;phase:string;uploaded:number;total:number}|null>(null);
  const [error,setError]=useState("");
  const [notice,setNotice]=useState("");
- const [apiUrl,setApiUrl]=useState(DEFAULT_API);
- const [backendDraft,setBackendDraft]=useState(DEFAULT_API);
- const [accessToken,setAccessToken]=useState("");
- const [tokenDraft,setTokenDraft]=useState("");
+
  const [apiStatus,setApiStatus]=useState<"unknown"|"checking"|"online"|"offline">("unknown");
- const API=apiUrl;
- const isLocalApi=/^http:\/\/(?:localhost|127\.0\.0\.1):8000\/?$/i.test(API);
- const authHeaders:Record<string,string>=accessToken?{Authorization:"Bearer "+accessToken}:{};
+ const API=DEFAULT_API;
+ const authHeaders:Record<string,string>={};
  const [selectedCandidate,setSelectedCandidate]=useState<string|null>(null);
  const [jobStatus,setJobStatus]=useState<{id:string;status:string;phase:string;percent:number;checked:number;total:number;elapsed_seconds:number;error?:string|null}|null>(null);
  const [profile,setProfile]=useState<AssetDiagnostics|null>(null);
@@ -106,7 +102,7 @@ export default function Page(){
  const currentRun=runs.find(r=>r.id===selected)||runs[0];
  const validated=runs.flatMap(r=>r.candidates).filter(c=>c.accepted);
  const count=runs.reduce((acc,r)=>acc+r.tested,0);
- useEffect(()=>{try{const tk=sessionStorage.getItem("tq_api_token");if(tk){setAccessToken(tk);setTokenDraft(tk)}const a=localStorage.getItem("tq_api_url");if(a){setApiUrl(a);setBackendDraft(a)}const d=localStorage.getItem("tq_datasets");const r=localStorage.getItem("tq_runs");const c=localStorage.getItem("tq_cfg");const s=localStorage.getItem("tq_sessions_v1");if(d)setDatasets(JSON.parse(d));const previousRuns:RunResult[]=r?JSON.parse(r):[];if(r)setRuns(previousRuns);if(c)setCfg({...DEFAULT,...JSON.parse(c)});if(s){setSessions(JSON.parse(s))}else if(previousRuns.length){setSessions(previousRuns.map(run=>({id:"migrated-"+run.id,name:run.config.name,symbol:run.config.symbol,config:run.config,createdAt:run.created_at,updatedAt:run.created_at,status:"results" as const,runId:run.id,found:run.candidates.length})))}}catch{/* ignore corrupt local draft */}finally{setSessionsHydrated(true)}},[]);
+ useEffect(()=>{try{localStorage.removeItem("tq_api_url");sessionStorage.removeItem("tq_api_token");const d=localStorage.getItem("tq_datasets");const r=localStorage.getItem("tq_runs");const c=localStorage.getItem("tq_cfg");const s=localStorage.getItem("tq_sessions_v1");if(d)setDatasets(JSON.parse(d));const previousRuns:RunResult[]=r?JSON.parse(r):[];if(r)setRuns(previousRuns);if(c)setCfg({...DEFAULT,...JSON.parse(c)});if(s){setSessions(JSON.parse(s))}else if(previousRuns.length){setSessions(previousRuns.map(run=>({id:"migrated-"+run.id,name:run.config.name,symbol:run.config.symbol,config:run.config,createdAt:run.created_at,updatedAt:run.created_at,status:"results" as const,runId:run.id,found:run.candidates.length})))}}catch{/* ignore corrupt local draft */}finally{setSessionsHydrated(true)}},[]);
  useEffect(()=>{localStorage.setItem("tq_datasets",JSON.stringify(datasets))},[datasets]);
  useEffect(()=>{readExperiments<RunResult>().then(saved=>{
    if(saved.length)setRuns(saved.sort((a,b)=>b.created_at.localeCompare(a.created_at)));
@@ -139,10 +135,9 @@ export default function Page(){
   setUploadProgress({percent:0,phase:"Comprobando conexión",uploaded:0,total:file.size});
   try{
    if(!API)throw Error("No se ha configurado un servidor FastAPI.");
-   if(!accessToken&&!isLocalApi)throw Error("Falta guardar el token privado. En «Conexión con motor» pega el token y pulsa «Guardar token en esta sesión».");
    if(!/\.csv$/i.test(file.name))throw Error("Selecciona un archivo .csv original de MetaTrader 5.");
    if(!file.size)throw Error("El archivo CSV está vacío.");
-   const maxFileMiB=isLocalApi?1024:150;
+   const maxFileMiB=1024;
    if(file.size>maxFileMiB*1024*1024)throw Error("Este motor admite un máximo de "+maxFileMiB+" MiB por archivo CSV.");
    const firstLine=(await file.slice(0,4096).text()).replace(/^\uFEFF/,"").split(/\r?\n/,1)[0];
    const mt5=/<DATE>\s+<TIME>\s+<OPEN>\s+<HIGH>\s+<LOW>\s+<CLOSE>/i.test(firstLine);
@@ -152,12 +147,12 @@ export default function Page(){
     try{data=JSON.parse(raw)}catch{}
     if(!resp.ok){
       const detail=typeof data.detail==="string"?data.detail:"";
-      if(resp.status===401)throw Error("Token rechazado (401). Vuelve a pegar el token privado de Render en «Guardar token en esta sesión».");
-      if(resp.status===404)throw Error("Subida no encontrada (404): Render pudo reiniciarse y perder el archivo temporal; inicia la importación nuevamente.");
+      if(resp.status===401)throw Error("El motor local rechazó el acceso (401). Reinicia el iniciador de TradingQuant.");
+      if(resp.status===404)throw Error("Subida no encontrada (404). Vuelve a importarla si el proceso local se reinició.");
       if(resp.status===409)throw Error(detail||"Se interrumpió el orden de los bloques de subida.");
-      if(resp.status===413)throw Error("Archivo o bloque demasiado grande para Render (HTTP 413).");
+      if(resp.status===413)throw Error("Archivo o bloque demasiado grande para el motor local (HTTP 413).");
       if(resp.status===422)throw Error("CSV no válido: "+(detail||"Revisa el archivo MT5."));
-      if(resp.status>=500)throw Error("El motor Render respondió HTTP "+resp.status+". Revisa su consumo de memoria y sus registros.");
+      if(resp.status>=500)throw Error("El motor local respondió HTTP "+resp.status+". Revisa su consumo de memoria y sus registros.");
       throw Error(detail||"Error HTTP "+resp.status+" durante la importación.");
     }
     return data;
@@ -165,7 +160,7 @@ export default function Page(){
    const send=async(url:string,opts:RequestInit)=>{
     let response:Response;
     try{response=await fetch(url,{...opts,cache:"no-store"})}
-    catch{throw Error("La conexión se interrumpió antes de recibir respuesta de Render. Puede ser un problema de red, CORS o un reinicio del servidor.");}
+    catch{throw Error("La conexión con FastAPI local se interrumpió. Comprueba que esté abierta la ventana «Motor Científico».");}
     return explain(response);
    };
    const auth=await send(API+"/api/auth/check",{headers:authHeaders});
@@ -177,7 +172,7 @@ export default function Page(){
    const uploadId=String(initiated.id||"");
    const chunkBytes=Number(initiated.chunk_bytes);
    if(!/^[0-9a-f-]{36}$/i.test(uploadId)||chunkBytes!==2*1024*1024)
-      throw Error("La API de Render devolvió un identificador o tamaño de bloque inválido.");
+      throw Error("La API local devolvió un identificador o tamaño de bloque inválido.");
    let transferred=0;
    for(let offset=0,index=0;offset<file.size;offset+=chunkBytes,index++){
       const buffer=await file.slice(offset,Math.min(file.size,offset+chunkBytes)).arrayBuffer();
@@ -222,24 +217,6 @@ export default function Page(){
   }catch(e){setError(e instanceof Error?e.message:"No se pudo importar el CSV.");}
   finally{setUploading(false);if(fileRef.current)fileRef.current.value="";}
  }
- function saveBackend(){
-  const address=backendDraft.trim().replace(/\/+$/,"");
-  if(!address){localStorage.removeItem("tq_api_url");setApiUrl(DEFAULT_API);setBackendDraft(DEFAULT_API);setApiStatus("unknown");return}
-  try{
-   const url=new URL(address);
-   const local=["localhost","127.0.0.1"].includes(url.hostname);
-   if((url.protocol!=="https:"&&!(local&&url.protocol==="http:"))||url.username||url.password||url.search||url.hash||url.pathname!=="/")
-    throw Error("Usa una URL HTTPS de origen, sin rutas ni credenciales. HTTP solo en localhost.");
-  }catch(e){setError(e instanceof Error?e.message:"URL de API inválida.");return}
-  if(address!==API){setDatasets([]);change("dataset_id","")}
-  localStorage.setItem("tq_api_url",address);setApiUrl(address);setApiStatus("unknown");
-  setNotice("Dirección del motor actualizada. Comprueba la conexión antes de importar datos.");
- }
- function saveToken(){
-  const token=tokenDraft.trim();
-  if(token){sessionStorage.setItem("tq_api_token",token)}else{sessionStorage.removeItem("tq_api_token")}
-  setAccessToken(token);setApiStatus("unknown");setNotice("Token de acceso actualizado para esta sesión del navegador.");
- }
  async function checkBackend(){
   if(!API){setError("No hay dirección configurada para el motor.");return}
   setApiStatus("checking");
@@ -252,14 +229,14 @@ export default function Page(){
     const body=await response.json();
     if(body.status!=="ok")throw Error("Respuesta no válida del backend.");
     const authorized=await fetch(API+"/api/auth/check",{cache:"no-store",signal:abort.signal,headers:authHeaders});
-    if(!authorized.ok)throw Error(authorized.status===401?"Token de acceso no autorizado. Copia el secreto desde Render y guárdalo aquí.":"La API rechazó la autenticación (HTTP "+authorized.status+").");
-    setApiStatus("online");setNotice("Motor FastAPI en línea y token validado.");
+    if(!authorized.ok)throw Error(authorized.status===401?"La API local rechazó el acceso. Reinicia el iniciador de TradingQuant.":"La API rechazó la autenticación (HTTP "+authorized.status+").");
+    setApiStatus("online");setNotice("Motor FastAPI local conectado. No requiere token ni conexión a la nube.");
    }finally{clearTimeout(timeout)}
   }catch(e){setApiStatus("offline");setError("El motor no responde desde este navegador: "+(e instanceof Error?e.message:"error de conexión o CORS"))}
  }
  async function analyzeHistorical(){
    if(!cfg.dataset_id){setError("Selecciona un CSV histórico para analizar los límites del instrumento.");return}
-   if(!API){setError("El motor FastAPI todavía no está conectado a la web. Configura NEXT_PUBLIC_API_URL para analizar datos reales.");return}
+   if(!API){setError("El proceso FastAPI local no está disponible en 127.0.0.1:8000.");return}
    setAnalyzing(true);setError("");
    try{
     const resp=await fetch(API+"/api/explorations/preflight",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders},body:JSON.stringify(cfg)});
@@ -270,7 +247,7 @@ export default function Page(){
    finally{setAnalyzing(false)}
  }
  async function explore(){
-  if(!API){setError("No se ha conectado FastAPI en producción. NEXT_PUBLIC_API_URL es necesario para iniciar backtests reales.");return}
+  if(!API){setError("El motor local FastAPI no está disponible en 127.0.0.1:8000. Abre el iniciador de TradingQuant.");return}
   if(!cfg.dataset_id){setError("Debes importar datos OHLC para investigar.");return}
   if(cfg.macro_indicators?.length){setError("Hay reglas macro sin fuente verificable; retíralas antes de ejecutar.");return}
   if(!cfg.timeframes?.length||!cfg.families.length){setError("Selecciona temporalidades e indicadores válidos.");return}
@@ -371,7 +348,7 @@ export default function Page(){
  <div className="section-space"><SectionHeading eyebrow="METODOLOGÍA" title="Un proceso que puedes auditar" description="La calidad de la estrategia depende del método de validación, no de una curva atractiva."/><div className="info-grid"><InfoCard icon={SlidersHorizontal} title="01. Genera" desc="Busca reglas interpretables y rangos de parámetros sobre un dataset seleccionado."/><InfoCard icon={Microscope} title="02. Contrasta" desc="Separa entrenamiento y prueba temporal para reducir el sesgo de selección."/><InfoCard icon={Shield} title="03. Protege" desc="Evalúa límites de pérdida y remuestreo antes de promover candidatos."/></div></div></>}
  {view==="sessions"&&<SessionOverview sessions={sessions} onCreate={createSession} onOpen={editSession} onDelete={deleteSession} onResults={id=>{const sess=sessions.find(t=>t.id===id);if(sess?.runId&&runs.some(t=>t.id===sess.runId)){setSelected(sess.runId);setSelectedCandidate(null);open("results")}else setError("Esta sesión todavía no tiene un resultado disponible en el navegador actual.")}}/>}
  {view==="builder"&&<StrategyConfigurator config={cfg} datasetList={datasets} loading={loading} onChange={change} onUpload={()=>open("datasets")} profile={profile} analyzing={analyzing} onAnalyze={analyzeHistorical} onExecute={explore} onBack={()=>open("sessions")}/>}
- {view==="datasets"&&<><div className="page-heading"><div><div className="eyebrow">INFRAESTRUCTURA / HISTORICAL DATA</div><h1>Datos históricos</h1><p>El fundamento del laboratorio es un conjunto de datos verificable y consistente.</p></div><button className="btn btn-primary" onClick={()=>fileRef.current?.click()} disabled={uploading}><Plus size={17}/> Subir CSV</button></div><div className="tq-api-settings"><div><strong><Database size={16}/> Conexión con motor de investigación</strong><p>Servidor FastAPI persistente. Puedes usar la URL oficial configurada en Vercel o conectar la URL HTTPS de Render sin publicar de nuevo la web.</p></div><div className="tq-api-controls"><input aria-label="URL del servidor FastAPI" value={backendDraft} placeholder="https://tu-servicio.onrender.com" onChange={e=>setBackendDraft(e.target.value)}/><button type="button" className="btn btn-outline btn-small" onClick={saveBackend}>Guardar URL</button><button type="button" className="btn btn-outline btn-small" onClick={checkBackend} disabled={apiStatus==="checking"||!API}>{apiStatus==="checking"?"Verificando…":"Probar conexión"}</button><span className={"tq-api-pill "+apiStatus}>{apiStatus==="online"?"Conectado":apiStatus==="offline"?"No disponible":apiStatus==="checking"?"Comprobando":"Sin verificar"}</span></div><div className="tq-api-controls"><input type="password" autoComplete="off" aria-label="Token privado de acceso al motor" value={tokenDraft} placeholder="Token privado de Render (no publiques este valor)" onChange={e=>setTokenDraft(e.target.value)}/><button type="button" className="btn btn-outline btn-small" onClick={saveToken}>Guardar token en esta sesión</button></div><small>En modo local (127.0.0.1) la API funciona sin token y los datos se quedan en tu computadora. Para Render, utiliza tu token privado. La URL se guarda en este navegador.</small></div><input ref={fileRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>e.target.files?.[0]&&upload(e.target.files[0])}/><div className="upload-drop" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!uploading&&e.dataTransfer.files?.[0])upload(e.dataTransfer.files[0])}} onClick={()=>!uploading&&fileRef.current?.click()} role="button" tabIndex={0} onKeyDown={e=>(e.key==="Enter"||e.key===" ")&&fileRef.current?.click()}><div className="upload-drop-icon">{uploading?<LoaderCircle size={29} className="spin"/>:<UploadCloud size={29}/>}</div><h3>{uploading?(uploadProgress?.phase||"Importando CSV…"):"Arrastra tu investigación al laboratorio"}</h3><p>Haz clic para seleccionar un archivo CSV con velas OHLC.</p><button className="btn btn-outline" disabled={uploading} onClick={e=>{e.stopPropagation();fileRef.current?.click()}}><FileSpreadsheet size={16}/> Seleccionar archivo</button>{uploadProgress&&<div className="tq-upload-progress" role="progressbar" aria-valuenow={uploadProgress.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Progreso de importación CSV"><div><span>{uploadProgress.phase}</span><strong>{uploadProgress.percent}%</strong></div><div className="tq-r-track"><span style={{width:uploadProgress.percent+"%"}}/></div><small>{(uploadProgress.uploaded/(1024*1024)).toFixed(1)} / {(uploadProgress.total/(1024*1024)).toFixed(1)} MiB transferidos</small></div>}<small>CSV · hasta 150 MB · timestamp u columnas date + time · zona horaria conservada</small></div><div className="section-space"><SectionHeading eyebrow="LIBRERÍA" title="Mis datasets" description="Metadatos en navegador; archivos conservados en el almacenamiento local de la API." right={<Badge>{datasets.length} ARCHIVOS</Badge>}/>{datasets.length===0?<Empty icon={Database} title="No hay datasets importados" description="Sube datos OHLC de MetaTrader 5 para ejecutar tus primeras exploraciones."/>:<div className="dataset-list">{datasets.map(d=><div className="dataset-row" key={d.id}><span className="dataset-icon"><Database size={18}/></span><div><strong>{d.filename}</strong><small>{d.start} → {d.end}</small></div><span className="dataset-rows">{fCurrency(d.rows)} velas</span><Badge kind={cfg.dataset_id===d.id?"good":"neutral"}>{cfg.dataset_id===d.id?"SELECCIONADO":"CSV"}</Badge><button className="btn btn-outline btn-small" onClick={()=>{change("dataset_id",d.id);open("builder")}}>Usar <ArrowRight size={14}/></button></div>)}</div>}</div><div className="aside-note wide"><AlertTriangle size={17}/><p>Fuente horaria: se respeta la hora original del CSV; revisa horario del bróker y cambios DST. Los datos no se envían a un bróker ni se usan para ejecución real.</p></div></>}
+ {view==="datasets"&&<><div className="page-heading"><div><div className="eyebrow">INFRAESTRUCTURA / HISTORICAL DATA</div><h1>Datos históricos</h1><p>El fundamento del laboratorio es un conjunto de datos verificable y consistente.</p></div><button className="btn btn-primary" onClick={()=>fileRef.current?.click()} disabled={uploading}><Plus size={17}/> Subir CSV</button></div><div className="tq-api-settings"><div><strong><Database size={16}/> Motor científico local</strong><p>FastAPI, Polars, Numba, Monte Carlo y backtesting en tu PC. Sin Render ni servicios de terceros.</p></div><div className="tq-api-controls"><code>http://127.0.0.1:8000</code><button type="button" className="btn btn-outline btn-small" onClick={checkBackend} disabled={apiStatus==="checking"}>{apiStatus==="checking"?"Verificando…":"Verificar motor local"}</button><span className={"tq-api-pill "+apiStatus}>{apiStatus==="online"?"Conectado":apiStatus==="offline"?"Desconectado":apiStatus==="checking"?"Comprobando":"Sin verificar"}</span></div><small>La API escucha solo en 127.0.0.1. Los CSV y resultados se conservan en tu PC.</small></div><input ref={fileRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>e.target.files?.[0]&&upload(e.target.files[0])}/><div className="upload-drop" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!uploading&&e.dataTransfer.files?.[0])upload(e.dataTransfer.files[0])}} onClick={()=>!uploading&&fileRef.current?.click()} role="button" tabIndex={0} onKeyDown={e=>(e.key==="Enter"||e.key===" ")&&fileRef.current?.click()}><div className="upload-drop-icon">{uploading?<LoaderCircle size={29} className="spin"/>:<UploadCloud size={29}/>}</div><h3>{uploading?(uploadProgress?.phase||"Importando CSV…"):"Arrastra tu investigación al laboratorio"}</h3><p>Haz clic para seleccionar un archivo CSV con velas OHLC.</p><button className="btn btn-outline" disabled={uploading} onClick={e=>{e.stopPropagation();fileRef.current?.click()}}><FileSpreadsheet size={16}/> Seleccionar archivo</button>{uploadProgress&&<div className="tq-upload-progress" role="progressbar" aria-valuenow={uploadProgress.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Progreso de importación CSV"><div><span>{uploadProgress.phase}</span><strong>{uploadProgress.percent}%</strong></div><div className="tq-r-track"><span style={{width:uploadProgress.percent+"%"}}/></div><small>{(uploadProgress.uploaded/(1024*1024)).toFixed(1)} / {(uploadProgress.total/(1024*1024)).toFixed(1)} MiB transferidos</small></div>}<small>CSV · hasta 150 MB · timestamp u columnas date + time · zona horaria conservada</small></div><div className="section-space"><SectionHeading eyebrow="LIBRERÍA" title="Mis datasets" description="Metadatos en navegador; archivos conservados en el almacenamiento local de la API." right={<Badge>{datasets.length} ARCHIVOS</Badge>}/>{datasets.length===0?<Empty icon={Database} title="No hay datasets importados" description="Sube datos OHLC de MetaTrader 5 para ejecutar tus primeras exploraciones."/>:<div className="dataset-list">{datasets.map(d=><div className="dataset-row" key={d.id}><span className="dataset-icon"><Database size={18}/></span><div><strong>{d.filename}</strong><small>{d.start} → {d.end}</small></div><span className="dataset-rows">{fCurrency(d.rows)} velas</span><Badge kind={cfg.dataset_id===d.id?"good":"neutral"}>{cfg.dataset_id===d.id?"SELECCIONADO":"CSV"}</Badge><button className="btn btn-outline btn-small" onClick={()=>{change("dataset_id",d.id);open("builder")}}>Usar <ArrowRight size={14}/></button></div>)}</div>}</div><div className="aside-note wide"><AlertTriangle size={17}/><p>Fuente horaria: se respeta la hora original del CSV; revisa horario del bróker y cambios DST. Los datos no se envían a un bróker ni se usan para ejecución real.</p></div></>}
  {view==="running"&&<div className="tq-running"><div className="tq-r-eyebrow">MOTOR CIENTÍFICO / EJECUCIÓN REAL</div><h1>Exploración en progreso</h1><p>{cfg.name} · {cfg.symbol} · {cfg.timeframes.join(", ")}</p><div className="tq-running-progress"><div><strong>{jobStatus?.percent??0}%</strong><span>{jobStatus?.phase||"Preparando"}</span></div><div className="tq-r-track"><span style={{width:String(jobStatus?.percent??0)+"%"}}/></div></div><div className="tq-r-metrics"><div className="tq-r-metric"><span>Candidatos evaluados</span><strong>{jobStatus?.checked??0}</strong></div><div className="tq-r-metric"><span>Presupuesto del tramo</span><strong>{jobStatus?.total??cfg.candidates}</strong></div><div className="tq-r-metric"><span>Tiempo transcurrido</span><strong>{jobStatus?.elapsed_seconds??0}s</strong></div><div className="tq-r-metric"><span>Estado</span><strong>{jobStatus?.status||"En cola"}</strong></div></div><div className="tq-r-note"><Info size={16}/> El progreso proviene del worker Python. Las fases de Monte Carlo y validación se calculan después de explorar. Mantén este motor activo hasta terminar.</div></div>}
  {view==="results"&&currentRun&&<ResearchResults run={currentRun} onSelect={id=>{setSelectedCandidate(id);open("detail")}} onEdit={()=>{const s=sessions.find(t=>t.runId===currentRun.id);if(s)editSession(s.id);else open("builder")}}/>}
  {view==="detail"&&currentRun&&selectedCandidate&&(()=>{const cand=currentRun.candidates.find(t=>t.id===selectedCandidate);return cand?<StrategyDetail run={currentRun} candidate={cand} onBack={()=>open("results")}/>:null})()}
