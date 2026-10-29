@@ -151,6 +151,7 @@ export default function Page(){
    if(!resp.ok)throw Error(typeof body.detail==="string"?body.detail:"No se pudo iniciar la exploración.");
    setJobStatus(body);open("running");
    const jobId=String(body.id);
+   localStorage.setItem("tq_active_job",JSON.stringify({jobId,sessionId:activeSessionId}));
    while(true){
      await new Promise(resolve=>setTimeout(resolve,1200));
      const stateResponse=await fetch(API+"/api/explorations/jobs/"+encodeURIComponent(jobId),{cache:"no-store"});
@@ -164,16 +165,60 @@ export default function Page(){
        if(!resultResponse.ok)throw Error(result.detail||"No se pudo recuperar el resultado de la exploración.");
        setRuns(prev=>[result,...prev.filter(t=>t.id!==result.id)]);
        if(activeSessionId)setSessions(prev=>prev.map(t=>t.id===activeSessionId?{...t,status:"results",runId:result.id,found:result.candidates.length}:t));
+       localStorage.removeItem("tq_active_job");
        setSelected(result.id);setSelectedCandidate(null);open("results");
        setNotice("Exploración real finalizada: "+result.tested+" probadas, "+result.accepted+" candidatas aprobadas.");
        break;
      }
    }
   }catch(e){
+   localStorage.removeItem("tq_active_job");
    if(activeSessionId)setSessions(prev=>prev.map(t=>t.id===activeSessionId?{...t,status:t.runId?"results":"draft"}:t));
    setError(e instanceof Error?e.message:"Motor de backtesting no disponible.");
   }finally{setLoading(false)}
  }
+ useEffect(()=>{
+   if(!API)return;
+   let alive=true;
+   const saved=localStorage.getItem("tq_active_job");
+   if(!saved)return;
+   let id="",sessionId:string|null=null;
+   try{const job=JSON.parse(saved);id=String(job.jobId);sessionId=job.sessionId??null}catch{localStorage.removeItem("tq_active_job");return}
+   if(!id)return;
+   const restore=async()=>{
+    setView("running");setLoading(true);
+    while(alive){
+     try{
+      const response=await fetch(API+"/api/explorations/jobs/"+encodeURIComponent(id),{cache:"no-store"});
+      if(!response.ok)throw Error("No se encontró el trabajo en el motor. Es posible que la API se haya reiniciado.");
+      const status=await response.json();
+      if(!alive)return;
+      setJobStatus(status);
+      if(status.status==="failed")throw Error(status.error||"La exploración no pudo continuar.");
+      if(status.status==="completed"){
+       const resultResponse=await fetch(API+"/api/explorations/jobs/"+encodeURIComponent(id)+"/result",{cache:"no-store"});
+       if(!resultResponse.ok)throw Error("No se pudo recuperar la exploración terminada.");
+       const result=await resultResponse.json();
+       if(!alive)return;
+       setRuns(old=>[result,...old.filter(t=>t.id!==result.id)]);
+       if(sessionId)setSessions(old=>old.map(t=>t.id===sessionId?{...t,status:"results",runId:result.id,found:result.candidates.length}:t));
+       setSelected(result.id);setView("results");setLoading(false);
+       localStorage.removeItem("tq_active_job");
+       return;
+      }
+      await new Promise(resolve=>setTimeout(resolve,1200));
+     }catch(e){
+      if(!alive)return;
+      setError(e instanceof Error?e.message:"No se puede reanudar la exploración.");
+      setLoading(false);setView("sessions");
+      localStorage.removeItem("tq_active_job");
+      return;
+     }
+    }
+   };
+   void restore();
+   return ()=>{alive=false};
+ },[]);
  const stepsComplete=Boolean(cfg.dataset_id&&cfg.name.trim()&&cfg.families.length);
  return <div className="shell">
  <aside className={`sidebar ${mobile?"sidebar-open":""}`}>
