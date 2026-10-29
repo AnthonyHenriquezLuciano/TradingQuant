@@ -40,7 +40,7 @@ const options:{id:"market"|"stop"|"limit";name:string;desc:string}[]=[
 const U=[{value:"atr",label:"ATR"},{value:"r",label:"R (distancia SL)"},{value:"percent",label:"% del precio"}] as const;
 function NumberField({label,value,onChange,min=0,max=1000,step=.1,suffix,help}:{
  label:string;value:number;onChange:(v:number)=>void;min?:number;max?:number;step?:number;suffix?:string;help?:string
-}){return <label className="tq-adv-field"><span>{label}{help&&<Info size={13} title={help}/>}</span><div><input type="number" min={min} max={max} step={step} value={value} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))onChange(n)}}/>{suffix&&<small>{suffix}</small>}</div></label>}
+}){return <label className="tq-adv-field"><span>{label}{help&&<span title={help} className="tq-adv-tip"><Info size={13}/></span>}</span><div><input type="number" min={min} max={max} step={step} value={value} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))onChange(n)}}/>{suffix&&<small>{suffix}</small>}</div></label>}
 function UnitField({label,value,onChange}:{label:string;value:Unit;onChange:(v:Unit)=>void}){return <label className="tq-adv-field"><span>{label}</span><select value={value} onChange={e=>onChange(e.target.value as Unit)}>{U.map(u=><option key={u.value} value={u.value}>{u.label}</option>)}</select></label>}
 function Switch({checked,onChange}:{checked:boolean;onChange:(v:boolean)=>void}){return <label className="tq-adv-switch"><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/><span/></label>}
 function Block({title,description,enabled,onToggle,children}:{title:string;description:string;enabled:boolean;onToggle:(v:boolean)=>void;children?:React.ReactNode}){
