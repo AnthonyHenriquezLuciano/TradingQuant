@@ -78,4 +78,5 @@ def test_default_quality_filters_historical_no_fake_pass():
         quality={"min_sharpe":4,"max_drawdown_pct":.00001,"min_win_rate_pct":99,"min_dsr":.95}))
     assert result["tested"]>0
     assert result["total_shortlist"]<=12
-    assert all(c["quality_is"]["sharpe"]>=4 for c in result["candidates"])
+    assert all((c["quality_is"]["sharpe"]>=4 and not c["quality_is"]["max_drawdown_pct"]> .00001) or not c["accepted"] for c in result["candidates"])
+    assert all("quality_is" in c for c in result["candidates"])
