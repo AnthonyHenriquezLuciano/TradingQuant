@@ -98,7 +98,7 @@ def funding_pass_rate(
             failed_now = (loss_pct >= daily_dd_pct) | ((1. - equity[active]) * 100. >= total_dd_pct)
             indices = np.flatnonzero(active)
             alive[indices[failed_now]] = False
-            passed[indices[~failed_now & (equity[active][~failed_now] >= 1. + target/100.)]] = True
+            passed[indices[(~failed_now) & (equity[active] >= 1. + target/100.)]] = True
         alive &= passed
     return float(alive.mean() * 100.)
 
@@ -120,7 +120,6 @@ def objective_score(
     equity = _realized_equity(r, risk_pct, sizing)
     daily = _daily_returns(r, days, calendar, risk_pct, sizing)
     span = max(1, len(calendar))
-    realized = equity[1:]
     peaks = np.maximum.accumulate(equity)
     max_dd_fraction = float(np.max((peaks - equity) / np.maximum(peaks, 1e-12)))
     dd_pct = 100.0 * max_dd_fraction
