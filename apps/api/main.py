@@ -16,6 +16,7 @@ from engine_capital import normalize_capital,normalize_risk_rules
 from engine_schedule import validate_schedule
 from optimization_objectives import OBJECTIVES
 from funding_simulator import validate_funding
+from advanced_modifiers import validate_advanced
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -100,6 +101,7 @@ class ExplorationRequest(BaseModel):
     capital: dict | None = None
     schedule: dict | None = None
     funding: dict | None = None
+    advanced_modifiers: dict | None = None
     source_timezone: Literal["UTC","Europe/London","Europe/Athens","America/New_York","America/Santo_Domingo","Asia/Tokyo"] = "UTC"
     direction: Literal["long", "short", "both"] = "both"
     risk_pct: float = Field(default=0.5, ge=0.05, le=2)
@@ -121,6 +123,7 @@ class ExplorationRequest(BaseModel):
             normalize_risk_rules(capital.get("risk_rules") or {})
             validate_schedule(self.schedule)
             validate_funding(self.funding)
+            validate_advanced(self.advanced_modifiers)
         except (TypeError, ValueError, KeyError) as exc:
             raise ValueError(str(exc)) from exc
         if self.macro_indicators:
