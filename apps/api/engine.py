@@ -27,7 +27,10 @@ def load_data(path: Path) -> pl.DataFrame:
         df = pl.read_csv(path, separator=delimiter, encoding="utf8-lossy", infer_schema_length=10000)
     except Exception as exc:
         raise ValueError(f"No se pudo leer el CSV: {exc}") from exc
-    renames = {col: col.strip().strip("<>").lower().replace(" ", "_") for col in df.columns}
+    # MetaTrader 5 exports use tab-separated <DATE>, <TIME>, <OPEN>, ...,
+    # <TICKVOL>, <VOL>, <SPREAD>.  Only price columns are required for the
+    # current OHLC engine; the original CSV is retained on disk unchanged.
+    renames = {col: col.lstrip("\\ufeff").strip().strip("<>").lower().replace(" ", "_") for col in df.columns}
     if len(set(renames.values())) != len(df.columns):
         raise ValueError("El CSV contiene encabezados duplicados.")
     df = df.rename(renames)
@@ -62,7 +65,7 @@ def load_data(path: Path) -> pl.DataFrame:
     except Exception as exc:
         raise ValueError(f"Fechas u OHLC inválidos: {exc}") from exc
     if len(df) < 300:
-        raise ValueError("Se requieren al menos 300 velas OHLC válidas y con fechas reconocibles.")
+        raise ValueError("Se requieren al menos 300 velas OHLC válidas y con fechas reconocibles. Para MT5 usa <DATE> y <TIME> con tabulaciones, por ejemplo 2020.01.01 y 00:00:00.")
     if len(df) > 5_000_000:
         raise ValueError("Más de 5 millones de barras. Divide el archivo para esta fase.")
     return df
