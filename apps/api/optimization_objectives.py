@@ -15,6 +15,7 @@ import hashlib
 import math
 
 import numpy as np
+from funding_simulator import validate_funding,simulate_funding
 
 OBJECTIVES = (
     "balanced", "sharpe", "sortino", "calmar", "net_profit",
@@ -107,8 +108,8 @@ def objective_score(
     metric: str, outcomes: np.ndarray, exit_days: np.ndarray,
     observed_days: np.ndarray, risk_pct: float, sizing: str,
     initial_deposit: float, daily_dd_pct: float, total_dd_pct: float,
-    seed: int = 0,
-) -> tuple[float, dict[str, float]]:
+    seed: int = 0, funding_config: dict | None = None,
+) -> tuple[float, dict]:
     """Higher score is better for every objective. Selection is entirely IS."""
     validate_objective(metric)
     r = np.asarray(outcomes, dtype=np.float64)
@@ -142,8 +143,21 @@ def objective_score(
     annual_return = (max(0., equity[-1]) ** (252./span) - 1.) if equity[-1] > 0 else -1.
     calmar = annual_return / max_dd_fraction if max_dd_fraction>1e-10 else (100. if annual_return>0 else 0.)
     funding = 0.
-    if metric == "funding_pass_rate":
-        funding = funding_pass_rate(daily, daily_dd_pct, total_dd_pct, seed)
+    funding_result = None
+    if funding_config is not None and validate_funding(funding_config)["enabled"]:
+        normalized=validate_funding(funding_config)
+        activity=np.isin(calendar,days)
+        funding_result=simulate_funding(daily,activity,normalized,seed)
+        funding=funding_result["pass_rate_pct"]
+        # We prefer strategies with the same pass rate that pass sooner.
+        # P20 is CONDITIONAL on success and must never replace pass rate.
+        selected=funding_result["selected_percentile_days"]
+        if metric=="funding_pass_rate" and selected is not None:
+            funding=funding/(1.+selected/365.)
+        if not funding_result["eligible"]:
+            funding-=100000.
+    elif metric == "funding_pass_rate":
+        funding=funding_pass_rate(daily, daily_dd_pct, total_dd_pct, seed)
 
     values = {
         "balanced": 2.*sharpe - max(0., dd_pct - 30.) - 0.5*max(0., dd_pct-30.) +
@@ -158,6 +172,7 @@ def objective_score(
     score = float(np.clip(values[metric], -1e6, 1e6))
     return score, {
         "objective_score": round(score, 6),
+        "funding_evaluation_is": funding_result,
         "annualized_sharpe": round(float(np.clip(sharpe,-1e6,1e6)), 4),
         "annualized_sortino": round(float(np.clip(sortino,-1e6,1e6)), 4),
         "calmar": round(float(np.clip(calmar,-1e6,1e6)), 4),
@@ -165,7 +180,7 @@ def objective_score(
         "drawdown_pct": round(dd_pct, 4),
         "expectancy_usd_per_trade": round(expectancy, 4),
         "recovery_factor": round(float(np.clip(recovery,-1e6,1e6)),4),
-        "funding_pass_rate_estimated_pct": round(funding, 4) if metric=="funding_pass_rate" else None,
+        "funding_pass_rate_estimated_pct": funding_result["pass_rate_pct"] if funding_result is not None else round(funding, 4) if metric=="funding_pass_rate" else None,
         "observed_trading_days": span,
     }
 
