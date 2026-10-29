@@ -1,19 +1,22 @@
 "use client";
 import {useState} from "react";
 import {ArrowRight,Check,ChevronDown,Info,LockKeyhole,ShieldCheck,SlidersHorizontal,Target,Wallet} from "lucide-react";
+import {RiskRulesEditor,DEFAULT_RISK_RULES,type RiskRules} from "./risk-rules-editor";
 export type Range={from:number;step:number;to:number};
 export type CapitalSettings={
  exit_mode:"atr_linked"|"atr_classic"|"percent";
  sl_atr:Range;tp_multiplier:Range;tp_atr:Range;sl_percent:Range;
  breakeven_enabled:boolean;breakeven_r:number;trailing_enabled:boolean;trailing_atr:number;
  max_bars_in_trade:number;max_trades_per_day:number;cooldown_bars:number;stop_after_daily_pct:number;
+ risk_rules:RiskRules;
 };
 export const DEFAULT_CAPITAL:CapitalSettings={
  exit_mode:"atr_linked",
  sl_atr:{from:.5,step:.1,to:3},tp_multiplier:{from:.5,step:.1,to:2},
  tp_atr:{from:.5,step:.1,to:6},sl_percent:{from:.1,step:.1,to:1.5},
  breakeven_enabled:false,breakeven_r:1,trailing_enabled:false,trailing_atr:1.5,
- max_bars_in_trade:0,max_trades_per_day:0,cooldown_bars:0,stop_after_daily_pct:0
+ max_bars_in_trade:0,max_trades_per_day:0,cooldown_bars:0,stop_after_daily_pct:0,
+ risk_rules:DEFAULT_RISK_RULES
 };
 type Props={
  value:CapitalSettings;onChange:(v:CapitalSettings)=>void;deposit:number;riskPct:number;
@@ -86,6 +89,7 @@ export function CapitalManagement({value,onChange,deposit,riskPct,sizing,dailyDD
   </div>
   <p className="tq-capital-muted">Los límites se comprueban sobre saldo realizado; los SL de seguridad siguen activos aunque se alcance un límite.</p>
  </>)}
+ <section className="tq-capital-group"><div className="tq-capital-group-content"><RiskRulesEditor rules={{...DEFAULT_RISK_RULES,...c.risk_rules}} onChange={x=>change({risk_rules:x})} riskPct={riskPct} onRisk={onRisk} tradesDay={c.max_trades_per_day} onTradesDay={x=>change({max_trades_per_day:x})}/></div></section>
  <div className="tq-capital-note"><Info size={17}/> Modos de pips, estructura y salida parcial están identificados como pendientes hasta tener una simulación respaldada por datos del instrumento. No se ejecutan de manera aproximada.</div>
  </div>;
 }
