@@ -18,6 +18,7 @@ from engine import (
     simulate, summarize, bootstrap,
 )
 from market_setups import SITUATIONS, SOURCE_ZONES, sweep_reference, sweep_signals
+from technical_signals import SUPPORTED as EXTENDED_FAMILIES, technical_signals
 from engine_capital import normalize_capital,normalize_risk_rules,MODE_CODES,exit_keys,sample_exit,mutate_exit,simulate_capital
 from engine_schedule import time_arrays,validate_schedule
 from optimization_objectives import validate_objective,objective_score,reproducible_seed,_daily_returns
@@ -129,6 +130,7 @@ def confirmed_higher_bias(source: pl.DataFrame, lower: pl.DataFrame, htf: str) -
 
 
 DEFAULT_RANGES = {
+    "tech_period_min": 10, "tech_period_step": 5, "tech_period_max": 30,
     "ema_fast_min": 5, "ema_fast_step": 1, "ema_fast_max": 28,
     "ema_slow_min": 29, "ema_slow_step": 1, "ema_slow_max": 90,
     "rsi_period_min": 7, "rsi_period_step": 1, "rsi_period_max": 25,
@@ -157,6 +159,7 @@ def steps(r: dict[str,int], name: str) -> range:
 def checked_ranges(config: dict[str, Any]) -> dict[str, int]:
     r = {**DEFAULT_RANGES, **(config.get("indicator_ranges") or {})}
     bounds = {
+        "tech_period": (2, 150),
         "ema_fast": (2, 100), "ema_slow": (10, 250),
         "rsi_period": (2, 60), "rsi_oversold": (5, 45),
         "breakout_lookback": (5, 250),
@@ -196,6 +199,8 @@ def random_gene(rng: random.Random, families: list[int],
         slow = rng.choice(steps(r,"rsi_oversold"))
     elif kind == 2:
         fast, slow = 0, rng.choice(steps(r,"breakout_lookback"))
+    elif FAMILIES[kind] in EXTENDED_FAMILIES:
+        fast, slow = rng.choice(steps(r,"tech_period")), 0
     else:
         fast, slow = rng.choice(steps(r,FAMILIES[kind]+"_buffer")), 0
     return kind, fast, slow
@@ -219,6 +224,9 @@ def mutate_or_cross(rng: random.Random, a: tuple[int,int,int],
     elif kind==2:
         fast = 0
         slow = snap(r,"breakout_lookback",rng.choice((a[2],b[2]))+rng.randint(-8,8))
+    elif FAMILIES[kind] in EXTENDED_FAMILIES:
+        fast = snap(r,"tech_period",rng.choice((a[1],b[1]))+rng.randint(-5,5))
+        slow = 0
     else:
         fast = snap(r,FAMILIES[kind]+"_buffer",rng.choice((a[1],b[1]))+rng.randint(-2,2))
         slow = 0
@@ -392,6 +400,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
                 level, session_days, valid = references[kind]
                 signals = sweep_signals(hi,lo,close,level,session_days,valid,
                                         SITUATIONS[kind][4],fast)
+            elif FAMILIES[kind] in EXTENDED_FAMILIES:
+                signals = technical_signals(FAMILIES[kind],fast,op,hi,lo,close)
             else:
                 signals = make_signals(kind,fast,slow,close,hi,lo)
             if higher_bias is not None:
@@ -602,6 +612,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
                     if kind in SITUATIONS:
                         lev,local_days,valid=sweep_reference(synthetic_df,kind,source_timezone,trial["timeframe"])
                         sg=sweep_signals(sh,sl,sc,lev,local_days,valid,SITUATIONS[kind][4],fast)
+                    elif FAMILIES[kind] in EXTENDED_FAMILIES:
+                        sg=technical_signals(FAMILIES[kind],fast,so,sh,sl,sc)
                     else:
                         sg=make_signals(kind,fast,slow,sc,sh,sl)
                     if trial["context"] is not None:
