@@ -18,7 +18,8 @@ from engine import (
     simulate, summarize, bootstrap,
 )
 from market_setups import SITUATIONS, SOURCE_ZONES, sweep_reference, sweep_signals
-from engine_capital import normalize_capital,MODE_CODES,exit_keys,sample_exit,mutate_exit,simulate_capital
+from engine_capital import normalize_capital,normalize_risk_rules,MODE_CODES,exit_keys,sample_exit,mutate_exit,simulate_capital
+from engine_schedule import time_arrays,validate_schedule
 
 ORDER = list(INTERVALS)
 
@@ -223,6 +224,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         raise ValueError("El depósito inicial debe ser al menos USD 100.")
     ranges = checked_ranges(cfg)
     capital = normalize_capital(cfg)
+    risk_rules=normalize_risk_rules(capital.get("risk_rules") or {})
+    schedule=validate_schedule(cfg.get("schedule"))
     exit_code=MODE_CODES[capital["exit_mode"]]
     source_timezone = cfg.get("source_timezone", "UTC")
     if source_timezone not in SOURCE_ZONES:
@@ -264,6 +267,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     if mode == "genetic":
         warnings.append("Sharpe genético estimado a partir de resultados R diarios en días con operaciones; no equivale al Sharpe mark-to-market.")
 
+    max_gains=np.array([risk_rules[x] for x in ("max_daily_gain_pct","max_weekly_gain_pct","max_monthly_gain_pct","max_account_gain_pct")],dtype=np.float64)
+    max_losses=np.array([risk_rules[x] for x in ("max_daily_loss_pct","max_weekly_loss_pct","max_monthly_loss_pct","max_account_loss_pct")],dtype=np.float64)
+
     for (job_type, tf, htf), max_eval in zip(jobs,per):
         df = resample(source, tf)
         n = len(df)
@@ -271,7 +277,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         if cut < 250 or n-cut < 100:
             raise ValueError("El intervalo "+tf+" no tiene suficientes velas IS/OOS.")
         op,hi,lo,close = (df[k].to_numpy() for k in ("open","high","low","close"))
-        days = df["timestamp"].dt.date().cast(pl.Int32).to_numpy()
+        allow_entry,forced_exit,days,weeks,months=time_arrays(df,source_timezone,schedule)
         atr = atr_wilder(hi,lo,close,14)
         higher_bias = confirmed_higher_bias(source,df,htf) if htf else None
         references = {
@@ -295,6 +301,10 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 signals = make_signals(kind,fast,slow,close,hi,lo)
             if higher_bias is not None:
                 signals = np.where(signals == higher_bias,signals,0).astype(np.int8)
+            min_rr=risk_rules["min_reward_risk_ratio"]
+            estimated_rr=pair[1] if exit_code in (0,2) else pair[1]/pair[0]
+            if min_rr>0 and estimated_rr+1e-9<min_rr:
+                return None
             r_is,d_is = simulate_capital(
                 signals,op,hi,lo,close,atr,days,0,cut,
                 exit_code,pair[0],pair[1],cfg["cost_bps"],side,sampling_model,
@@ -303,6 +313,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
                 capital["max_trades_per_day"],capital["cooldown_bars"],
                 cfg["prop_daily_pct"],cfg["prop_max_pct"],capital["stop_after_daily_pct"],
+                allow_entry,forced_exit,weeks,months,
+                max_gains,max_losses,int(risk_rules["max_consecutive_wins"]),int(risk_rules["max_consecutive_losses"]),
             )
             metrics_is = summarize(
                 r_is,d_is,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -388,6 +400,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
             capital["max_trades_per_day"],capital["cooldown_bars"],
             cfg["prop_daily_pct"],cfg["prop_max_pct"],capital["stop_after_daily_pct"],
+            allow_entry,forced_exit,weeks,months,
+            max_gains,max_losses,int(risk_rules["max_consecutive_wins"]),int(risk_rules["max_consecutive_losses"]),
         )
         metrics_oos = summarize(
             r_oos,d_oos,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -430,6 +444,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         "Monte Carlo remuestrea operaciones OOS; no simula caminos de mercado.",
         "Los límites de pérdida y operaciones usan balance realizado, no drawdown flotante intrabar.",
         "BE y trailing se actualizan tras cerrar vela. Sin datos tick, los gaps y salidas parciales no están completamente modelados.",
+        "Horarios y filtros por día se calculan en UTC fijo; se respetan cierres forzados al precio de la primera vela disponible.",
+        "Límites semanales/mensuales y rachas se evalúan sobre balance realizado; no equivalen a protección intrabar de fondeo.",
     ]
     return dict(
         tested=len(all_trials),accepted=sum(1 for c in candidates if c["accepted"]),
