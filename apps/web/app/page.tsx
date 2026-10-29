@@ -383,7 +383,7 @@ export default function Page(){
    if(!resp.ok)throw Error(typeof body.detail==="string"?body.detail:"No se pudo iniciar la exploración.");
    setJobStatus(body);open("running");
    const jobId=String(body.id);
-   localStorage.setItem("tq_active_job",JSON.stringify({jobId,sessionId:activeSessionId}));
+   localStorage.setItem("tq_active_job",JSON.stringify({jobId,sessionId:activeSessionId,accountId:activeAccountId}));
    while(true){
      await new Promise(resolve=>setTimeout(resolve,1200));
      const stateResponse=await fetch(API+"/api/explorations/jobs/"+encodeURIComponent(jobId),{cache:"no-store",headers:authHeaders});
@@ -410,12 +410,12 @@ export default function Page(){
   }finally{setLoading(false)}
  }
  useEffect(()=>{
-   if(!API)return;
+   if(!API||!activeAccountId)return;
    let alive=true;
    const saved=localStorage.getItem("tq_active_job");
    if(!saved)return;
    let id="",sessionId:string|null=null;
-   try{const job=JSON.parse(saved);id=String(job.jobId);sessionId=job.sessionId??null}catch{localStorage.removeItem("tq_active_job");return}
+   try{const job=JSON.parse(saved);if(job.accountId!==activeAccountId)return;id=String(job.jobId);sessionId=job.sessionId??null}catch{localStorage.removeItem("tq_active_job");return}
    if(!id)return;
    const restore=async()=>{
     setView("running");setLoading(true);
@@ -450,7 +450,7 @@ export default function Page(){
    };
    void restore();
    return ()=>{alive=false};
- },[API]);
+ },[API,activeAccountId]);
  const stepsComplete=Boolean(cfg.dataset_id&&cfg.name.trim()&&cfg.families.length);
  return <div className="shell">
  <aside className={`sidebar ${mobile?"sidebar-open":""}`}>
