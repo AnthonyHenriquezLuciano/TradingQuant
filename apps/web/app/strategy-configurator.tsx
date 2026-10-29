@@ -9,6 +9,7 @@ import {
 import {IndicatorCatalog, type MacroRule} from "./indicator-catalog";
 import {CapitalManagement, DEFAULT_CAPITAL, type CapitalSettings} from "./capital-management";
 import {ScheduleConfig,DEFAULT_SCHEDULE,type ScheduleSettings} from "./schedule-config";
+import {FundingConfig,DEFAULT_FUNDING,type FundingSettings} from "./funding-config";
 
 export type IndicatorRanges = {
  ema_fast_min:number;ema_fast_step:number;ema_fast_max:number;
@@ -41,7 +42,7 @@ export type AlgoConfig = {
  start_date:string;end_date:string;initial_deposit:number;mode:"random"|"genetic";optimization_objective:OptimizationObjective;
  modeling:"open"|"ohlc"|"m1"|"ticks";sizing:"compound"|"fixed";
  multi_tf:"individual"|"combined"|"both";generations:number;candidates:number;
- families:string[];indicator_ranges:IndicatorRanges;source_timezone:string;macro_indicators:string[];macro_rules:Record<string,MacroRule>;capital:CapitalSettings;schedule:ScheduleSettings;direction:"long"|"short"|"both";risk_pct:number;rr:number;
+ families:string[];indicator_ranges:IndicatorRanges;source_timezone:string;macro_indicators:string[];macro_rules:Record<string,MacroRule>;capital:CapitalSettings;schedule:ScheduleSettings;funding:FundingSettings;direction:"long"|"short"|"both";risk_pct:number;rr:number;
  atr_multiplier:number;cost_bps:number;is_ratio:number;min_trades:number;
  mc_iterations:number;prop_daily_pct:number;prop_max_pct:number;
 };
@@ -95,7 +96,7 @@ function Row({label,id,children,active,toggle}:{label:string;id:string;children:
 
 export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUpload,onExecute,onBack}:Props){
  const [help,setHelp]=useState<string|null>(null);
- const [activeTab,setActiveTab]=useState<"config"|"indicators"|"capital"|"schedule">("config");
+ const [activeTab,setActiveTab]=useState<"config"|"indicators"|"capital"|"schedule"|"funding">("config");
  const [advanced,setAdvanced]=useState(false);
  const [customDeposit,setCustomDeposit]=useState(false);
  const update=<K extends keyof AlgoConfig>(key:K,value:AlgoConfig[K])=>onChange(key,value);
@@ -103,6 +104,8 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
  const ranges={...DEFAULT_INDICATOR_RANGES,...c.indicator_ranges};
  const cap={...DEFAULT_CAPITAL,...c.capital};
  const usedKeys:("sl_atr"|"tp_atr"|"sl_percent"|"tp_multiplier")[] = cap.exit_mode==="atr_classic"?["sl_atr","tp_atr"]:cap.exit_mode==="percent"?["sl_percent","tp_multiplier"]:["sl_atr","tp_multiplier"];
+ const funding={...DEFAULT_FUNDING,...c.funding};
+ const invalidFunding=funding.enabled&&(funding.phases.length<1||funding.phases.length>3||funding.phases.some(ph=>ph.min_days>ph.max_days||ph.target_pct<=0||ph.max_days<=0)||funding.daily_loss_pct<0||funding.total_loss_pct<=0||funding.simulations<32);
  const invalidCapital=usedKeys.some(k=>{const v=cap[k];return !Number.isFinite(v.from)||!Number.isFinite(v.to)||!Number.isFinite(v.step)||v.step<=0||v.from>v.to;})||c.prop_daily_pct>c.prop_max_pct;
  const multiNeedsTwo=c.multi_tf!=="individual"&&tfs.length<2;
  const invalidPeriod=Boolean(c.start_date&&c.end_date&&c.start_date>c.end_date);
@@ -124,7 +127,7 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
   return !Number.isInteger(min)||!Number.isInteger(max)||!Number.isInteger(step)||step<1||step>30||min<lower||max>upper||min>max;
  })||ranges.ema_fast_min+8>ranges.ema_slow_max;
  const hasPendingMacro=(c.macro_indicators||[]).length>0;
- const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||sweepTimeframeError||directionMismatch||hasPendingMacro||invalidCapital||c.candidates<10;
+ const cannotRun=loading||!c.dataset_id||!c.symbol||!c.start_date||!c.end_date||invalidPeriod||multiNeedsTwo||!c.families.length||invalidRanges||sweepTimeframeError||directionMismatch||hasPendingMacro||invalidCapital||invalidFunding||c.candidates<10;
  const missing=[
   ...(!c.symbol?["símbolo"]:[]),
   ...(!c.start_date||!c.end_date?["fecha de inicio y fin"]:[]),
@@ -136,7 +139,8 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
   ...(sweepTimeframeError?["usar solo M1–H1 con barridas de sesión"]:[]),
   ...(directionMismatch?["dirección compatible con las situaciones seleccionadas"]:[]),
   ...(hasPendingMacro?["retirar o dejar pendientes las reglas macro sin fuente de datos"]:[]),
-  ...(invalidCapital?["rangos o límites de gestión de capital válidos"]:[])
+  ...(invalidCapital?["rangos o límites de gestión de capital válidos"]:[]),
+  ...(invalidFunding?["configuración de fases y filtros de fondeo válida"]:[])
  ];
  const chooseTF=(value:string)=>{
   const next=tfs.includes(value)?tfs.filter(t=>t!==value):[...tfs,value];
@@ -157,6 +161,7 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
    <button type="button" role="tab" aria-selected={activeTab==="indicators"} className={activeTab==="indicators"?"active":""} onClick={()=>setActiveTab("indicators")}><ChartNoAxesCombined size={17}/> Indicadores <span className="tq-tab-pill">{c.families.length}</span></button>
    <button type="button" role="tab" aria-selected={activeTab==="capital"} className={activeTab==="capital"?"active":""} onClick={()=>setActiveTab("capital")}><Wallet size={17}/> Gestión de capital</button>
    <button type="button" role="tab" aria-selected={activeTab==="schedule"} className={activeTab==="schedule"?"active":""} onClick={()=>setActiveTab("schedule")}><Clock3 size={17}/> Horarios</button>
+   <button type="button" role="tab" aria-selected={activeTab==="funding"} className={activeTab==="funding"?"active":""} onClick={()=>setActiveTab("funding")}><ShieldCheck size={17}/> Fondeo</button>
   </div>
   {activeTab==="config"?<div className="tq-one-panel">
    <div className="tq-one-panel-header"><div className="tq-one-header-icon"><SlidersHorizontal size={19}/></div><div><strong>Parámetros de la sesión</strong><span>Mercado, ejecución y descubrimiento de estrategias</span></div><span className="tq-one-header-tag">RESEARCH MODE</span></div>
@@ -215,7 +220,7 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
     <div><div className="tq-one-ready"><ShieldCheck size={16}/><strong>{missing.length?"Configuración pendiente":"Configuración completa"}</strong></div><p>{missing.length?"Falta: "+missing.join(", "):"Revisa los parámetros antes de ejecutar."}</p></div>
     <button className="btn btn-primary" disabled={cannotRun} onClick={onExecute}>{loading?<LoaderCircle className="spin" size={17}/>:<Play size={16}/>} {loading?"Ejecutando...":"Iniciar exploración"} <ArrowRight size={16}/></button>
    </div>
-  </div>:activeTab==="indicators"?<div className="tq-one-panel tq-indicator-panel"><div className="tq-one-panel-header"><div className="tq-one-header-icon"><ChartNoAxesCombined size={19}/></div><div><strong>Indicadores y situaciones de mercado</strong><span>Señales técnicas, patrones de liquidez y parámetros Desde / Pasos / Hasta</span></div><span className="tq-one-header-tag">CATÁLOGO</span></div><IndicatorCatalog families={c.families} ranges={ranges} sourceTimezone={c.source_timezone||"UTC"} macroIndicators={c.macro_indicators||[]} macroRules={c.macro_rules||{}} onFamilies={v=>update("families",v)} onRanges={v=>update("indicator_ranges",v)} onTimezone={v=>update("source_timezone",v)} onMacroIndicators={v=>update("macro_indicators",v)} onMacroRules={v=>update("macro_rules",v)}/><footer className="tq-one-footer"><div><div className="tq-one-ready"><Check size={15}/><strong>{c.families.length} elementos seleccionados</strong></div><p>Todos los cambios se guardan en esta sesión.</p></div><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>:activeTab==="capital"?<div className="tq-one-panel tq-capital-panel"><CapitalManagement value={cap} onChange={v=>update("capital",v)} deposit={c.initial_deposit} riskPct={c.risk_pct} sizing={c.sizing} dailyDD={c.prop_daily_pct} totalDD={c.prop_max_pct} onRisk={v=>update("risk_pct",v)} onSizing={v=>update("sizing",v)} onDailyDD={v=>update("prop_daily_pct",v)} onTotalDD={v=>update("prop_max_pct",v)}/><footer className="tq-one-footer"><span><Check size={15}/> Parámetros de riesgo guardados por sesión</span><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>:<div className="tq-one-panel tq-hours-panel"><ScheduleConfig value={{...DEFAULT_SCHEDULE,...c.schedule}} onChange={v=>update("schedule",v)} sourceTimezone={c.source_timezone||"UTC"} onTimezone={tz=>update("source_timezone",tz)}/><footer className="tq-one-footer"><span><Check size={15}/> Sesiones y restricciones guardadas</span><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>}
+  </div>:activeTab==="indicators"?<div className="tq-one-panel tq-indicator-panel"><div className="tq-one-panel-header"><div className="tq-one-header-icon"><ChartNoAxesCombined size={19}/></div><div><strong>Indicadores y situaciones de mercado</strong><span>Señales técnicas, patrones de liquidez y parámetros Desde / Pasos / Hasta</span></div><span className="tq-one-header-tag">CATÁLOGO</span></div><IndicatorCatalog families={c.families} ranges={ranges} sourceTimezone={c.source_timezone||"UTC"} macroIndicators={c.macro_indicators||[]} macroRules={c.macro_rules||{}} onFamilies={v=>update("families",v)} onRanges={v=>update("indicator_ranges",v)} onTimezone={v=>update("source_timezone",v)} onMacroIndicators={v=>update("macro_indicators",v)} onMacroRules={v=>update("macro_rules",v)}/><footer className="tq-one-footer"><div><div className="tq-one-ready"><Check size={15}/><strong>{c.families.length} elementos seleccionados</strong></div><p>Todos los cambios se guardan en esta sesión.</p></div><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>:activeTab==="capital"?<div className="tq-one-panel tq-capital-panel"><CapitalManagement value={cap} onChange={v=>update("capital",v)} deposit={c.initial_deposit} riskPct={c.risk_pct} sizing={c.sizing} dailyDD={c.prop_daily_pct} totalDD={c.prop_max_pct} onRisk={v=>update("risk_pct",v)} onSizing={v=>update("sizing",v)} onDailyDD={v=>update("prop_daily_pct",v)} onTotalDD={v=>update("prop_max_pct",v)}/><footer className="tq-one-footer"><span><Check size={15}/> Parámetros de riesgo guardados por sesión</span><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>:activeTab==="schedule"?<div className="tq-one-panel tq-hours-panel"><ScheduleConfig value={{...DEFAULT_SCHEDULE,...c.schedule}} onChange={v=>update("schedule",v)} sourceTimezone={c.source_timezone||"UTC"} onTimezone={tz=>update("source_timezone",tz)}/><footer className="tq-one-footer"><span><Check size={15}/> Sesiones y restricciones guardadas</span><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>:<div className="tq-one-panel tq-fund-panel"><FundingConfig value={funding} onChange={v=>update("funding",v)} optimizationObjective={c.optimization_objective||"balanced"} initialDeposit={c.initial_deposit}/><footer className="tq-one-footer"><span><Check size={15}/> Reglas de fondeo guardadas en la sesión</span><button className="btn btn-primary" onClick={()=>setActiveTab("config")}>Volver a Configuración <ArrowRight size={16}/></button></footer></div>}
 
   <div className="tq-one-footnote"><Sparkles size={14}/> Investigación cuantitativa · Resultados OOS no garantizan rendimiento futuro · Modelado M1/tick pendiente de integración.</div>
  </div>;
