@@ -2,6 +2,12 @@
 
 Laboratorio de investigación cuantitativa y creador de algoritmos con enfoque en validación fuera de muestra y cuentas de fondeo.
 
+## Modo local Windows — sin limites del hosting Render
+
+Si quieres usar tu CPU, RAM y disco para backtesting, descarga el repositorio y ejecuta **INICIAR_TRADINGQUANT_LOCAL.bat**. Instala las dependencias iniciales, abre FastAPI y Next.js en tu PC y mantiene los CSV en tu equipo. La pagina local es **http://127.0.0.1:3000**, con backend **http://127.0.0.1:8000**; no requiere token en loopback. El limite de subida local es de 1024 MiB (ajustable), pero el consumo de RAM del backtest depende del tamaño real de los datos y validaciones.
+
+**Guia completa:** [MODO_LOCAL_WINDOWS.md](./MODO_LOCAL_WINDOWS.md). La version local es independiente de Render/Vercel; tus sesiones no se sincronizan automaticamente.
+
 ## Stack
 - **Frontend:** Next.js (App Router), React, TypeScript, CSS.
 - **API científica:** Python, FastAPI, Polars, NumPy y Numba.
