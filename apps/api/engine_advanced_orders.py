@@ -79,7 +79,7 @@ def simulate_advanced_orders(
     initial_atr=0.
     trailing_started=False
 
-    for i in range(max(101,start),end):
+    for i in range(max(41,start),end):
         if days[i]!=last_day:
             last_day=days[i]
             day_open=equity
