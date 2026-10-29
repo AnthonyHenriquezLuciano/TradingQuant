@@ -130,7 +130,8 @@ def objective_score(
     pf = min(100., profits_usd / losses_usd) if losses_usd > 1e-9 else (100. if profits_usd > 0 else 0.)
     expectancy = pnl_usd / r.size
     win_rate = float(np.mean(r > 0) * 100.)
-    recovery = (pnl_usd / max_dd_fraction / initial_deposit) if max_dd_fraction > 1e-10 else (100. if pnl_usd>0 else 0.)
+    max_dd_absolute_usd = float(np.max(peaks - equity) * initial_deposit)
+    recovery = (pnl_usd / max_dd_absolute_usd) if max_dd_absolute_usd > 1e-9 else (100. if pnl_usd>0 else 0.)
 
     mu = float(daily.mean())
     std = float(daily.std(ddof=1))
