@@ -192,9 +192,15 @@ async def upload_chunk(upload_id:str,index:int,request:Request):
     size_header=request.headers.get("content-length")
     if size_header and int(size_header)>CHUNK_BYTES:
         raise HTTPException(413,"Bloque demasiado grande (máximo 2 MiB).")
-    body=await request.body()
+    parts=[]
+    total=0
+    async for part in request.stream():
+        total+=len(part)
+        if total>CHUNK_BYTES:
+            raise HTTPException(413,"El bloque excede 2 MiB.")
+        parts.append(part)
     sha=request.headers.get("x-chunk-sha256","")
-    return UPLOADS.write(upload_id,index,body,sha)
+    return UPLOADS.write(upload_id,index,b"".join(parts),sha)
 
 @app.post("/api/datasets/uploads/{upload_id}/complete",status_code=202)
 def complete_chunked_upload(upload_id:str):
