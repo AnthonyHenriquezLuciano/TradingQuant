@@ -499,7 +499,12 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
         if not trial["quality_reasons_is"]:
             valid_trials.append(trial)
     # Only IS metrics determine the shortlist; never rank by held-out OOS.
-    shortlist = sorted(valid_trials,key=lambda t:(t["score"],t["in_sample"]["trades"]),reverse=True)[:min(50,budget)]
+    # Keep failed strategies visible and auditable; place successful IS filter
+    # candidates first, then failed candidates as clearly rejected comparisons.
+    rejected_trials=[t for t in all_trials if t["quality_reasons_is"]]
+    sort_key=lambda t:(t["score"],t["in_sample"]["trades"])
+    shortlist=(sorted(valid_trials,key=sort_key,reverse=True)
+               +sorted(rejected_trials,key=sort_key,reverse=True))[:min(50,budget)]
     if len(valid_trials)<len(all_trials):
         warnings.append(f"Filtro de calidad IS: {len(all_trials)-len(valid_trials)} de {len(all_trials)} candidatos descartados antes de evaluar OOS.")
     if not valid_trials and all_trials:
@@ -529,7 +534,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
             r_oos,cfg["risk_pct"],cfg["mc_iterations"],cfg["prop_max_pct"],1000+i,sizing,
         )
         quality_oos=realized_quality(r_oos,d_oos,days[cut:n],cfg["risk_pct"],sizing,metrics_oos,attempted_same_market)
-        reasons=["Filtro OOS: "+reason for reason in evaluate_quality(quality_oos,quality_cfg)]
+        reasons=["Filtro IS: "+reason for reason in trial["quality_reasons_is"]]
+        reasons+=["Filtro OOS: "+reason for reason in evaluate_quality(quality_oos,quality_cfg)]
 
         # Chronological OOS windows. Pure uses the selected candidate unchanged;
         # reopt selects from an IS-discovered pool using ONLY the past before
