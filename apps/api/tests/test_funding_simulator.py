@@ -17,7 +17,7 @@ def test_1_2_3_phases_and_invalid_ranges():
         conf(phases=[])
     with pytest.raises(ValueError,match="días mínimos"):
         conf(phases=[{"min_days":4,"max_days":3}])
-    with pytest.raises(ValueError,match="percentil"):
+    with pytest.raises(ValueError,match="Percentil"):
         conf(pass_day_percentile=33)
 
 
