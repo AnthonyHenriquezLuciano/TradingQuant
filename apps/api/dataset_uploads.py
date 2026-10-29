@@ -137,6 +137,35 @@ class UploadManager:
                 "received_bytes":0,"status":"uploading","error":None,
                 "created_at":now,"updated_at":now,"result":None}
             return self.status(uid)
+    def import_local(self, filename:str, inbox:Path):
+        """Register an inbox CSV without browser upload, safely inside local storage."""
+        if not filename or filename!=Path(filename).name or any(x in filename for x in ("/","\\","\\x00")):
+            raise HTTPException(400,"Nombre de archivo inválido.")
+        if not filename.lower().endswith(".csv"):
+            raise HTTPException(400,"Solo se aceptan CSV.")
+        path=inbox/filename
+        if path.is_symlink() or not path.is_file():
+            raise HTTPException(404,"CSV no encontrado en la carpeta local de entrada.")
+        size=path.stat().st_size
+        if size<1 or size>MAX_UPLOAD:
+            raise HTTPException(413,"El CSV está vacío o supera el límite de subida local.")
+        with self.lock:
+            active=sum(1 for j in self.jobs.values() if j["status"] in ("uploading","validating"))
+            if active>=MAX_JOBS:
+                raise HTTPException(429,"Ya hay dos archivos en proceso.")
+            uid=str(uuid.uuid4())
+            dest=self.folder/(uid+".csv")
+            try:
+                os.link(path,dest)
+            except OSError:
+                import shutil
+                shutil.copyfile(path,dest)
+            now=datetime.now(timezone.utc).isoformat()
+            self.jobs[uid]={"id":uid,"filename":filename,"expected_bytes":size,
+                "received_bytes":size,"status":"validating","error":None,
+                "created_at":now,"updated_at":now,"result":None}
+            self.pool.submit(self._validate,uid,dest)
+            return self.status(uid)
     def status(self,uid:str):
         with self.lock:
             j=self._job(uid)
