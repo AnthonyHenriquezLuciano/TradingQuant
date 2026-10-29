@@ -131,6 +131,7 @@ def simulate_capital(
     profit_stop_pct,
     allow_entry=None,forced_exit=None,weeks=None,months=None,
     max_gains=None,max_losses=None,max_consecutive_wins=0,max_consecutive_losses=0,
+    trace=None,
 ):
     """Output entry-day R multiples and entry days for comparable summaries.
 
@@ -249,6 +250,15 @@ def simulate_capital(
             roundtrip_cost=entry*cost_bps/10000.
             r=((exit_price-entry)*side-roundtrip_cost)/initial_distance
             outcomes[count]=r
+            if trace is not None:
+                trace[count,0]=entry_bar
+                trace[count,1]=i
+                trace[count,2]=entry
+                trace[count,3]=exit_price
+                trace[count,4]=side
+                trace[count,5]=entry
+                trace[count,6]=1.0
+                trace[count,7]=roundtrip_cost/initial_distance
             trade_days[count]=days[i]  # realized PnL belongs to the EXIT day
             count+=1
             if fixed_sizing:
