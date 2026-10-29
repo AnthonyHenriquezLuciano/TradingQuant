@@ -1,13 +1,14 @@
 "use client";
 import {useState} from "react";
-import {CircleHelp,Plus,Trash2,SlidersHorizontal,ShieldAlert,WifiOff} from "lucide-react";
+import {CircleHelp,Plus,Trash2,SlidersHorizontal,ShieldAlert,ShieldCheck} from "lucide-react";
+import type {MT5Symbol} from "./account-center";
 export type CostRow={
  symbol:string;spread_pips:number;commission_roundtrip_usd:number;
  slippage_pips:number;swap_long_usd:number;swap_short_usd:number;
  pip_size:number;contract_size:number;quote_to_usd:number;hold_days_estimate:number;
 };
 export type CostSettings={
- template:"generic"|"custom";auto_mt5:false;
+ template:"generic"|"custom";auto_mt5:boolean;
  selected_symbol:string;use_in_backtest:boolean;
  instruments:CostRow[]
 };
@@ -19,8 +20,8 @@ export const BASE_COSTS:CostRow[]=[
  {symbol:"USDCAD",spread_pips:1.5,commission_roundtrip_usd:7,slippage_pips:.3,swap_long_usd:0,swap_short_usd:0,pip_size:.0001,contract_size:100000,quote_to_usd:.73,hold_days_estimate:0}
 ];
 export const DEFAULT_COSTS:CostSettings={template:"generic",auto_mt5:false,selected_symbol:"XAUUSD",use_in_backtest:false,instruments:BASE_COSTS};
-type Props={value:CostSettings;onChange:(next:CostSettings)=>void;symbol:string;fallbackBps:number;onFallbackChange:(next:number)=>void};
-export function CostsConfig({value,onChange,symbol,fallbackBps,onFallbackChange}:Props){
+type Props={value:CostSettings;onChange:(next:CostSettings)=>void;symbol:string;snapshot:MT5Symbol|null;accountCurrency:string;fallbackBps:number;onFallbackChange:(next:number)=>void};
+export function CostsConfig({value,onChange,symbol,snapshot,accountCurrency,fallbackBps,onFallbackChange}:Props){
  const c={...DEFAULT_COSTS,...value};
  const [editing,setEditing]=useState(false);
  const [showHelp,setShowHelp]=useState(false);
@@ -33,7 +34,7 @@ export function CostsConfig({value,onChange,symbol,fallbackBps,onFallbackChange}
   set({template:"custom",instruments:rows.map(r=>r.symbol===sym?{...r,[key]:v}:r)});
  };
  return <div className="tq-research">
-  <div className="tq-research-intro"><span>LABORATORIO / EJECUCIÓN</span><h2>Costes de trading</h2><p>Plantillas editables de spread, comisión, slippage y swap por instrumento. MT5 permitirá recuperar valores del broker automáticamente más adelante.</p></div>
+  <div className="tq-research-intro"><span>LABORATORIO / EJECUCIÓN</span><h2>Costes de trading</h2><p>Costes configurables de cada símbolo, con especificaciones actuales del terminal MT5. Los históricos de spread, comisiones y swaps pueden diferir.</p></div>
   <section className="tq-research-card">
    <div className="tq-cost-header">
     <label>Plantilla de costes<select value={c.template} onChange={e=>set({template:e.target.value as CostSettings["template"],instruments:e.target.value==="generic"?BASE_COSTS:rows})}><option value="generic">Genérico (ECN) — ilustrativo</option><option value="custom">Mi catálogo personalizado</option></select></label>
@@ -41,7 +42,7 @@ export function CostsConfig({value,onChange,symbol,fallbackBps,onFallbackChange}
     <button title="Información" className="tq-cost-help" onClick={()=>setShowHelp(s=>!s)}><CircleHelp size={16}/></button>
    </div>
    {showHelp&&<p className="tq-research-note">Los valores de ejemplo no representan cotizaciones reales ni condiciones del broker. Para calcular correctamente el coste, ingresa tamaño de pip, contrato y conversión de moneda de cotización a USD. Swap se aproxima por duración media; no reproduce triples swaps ni cambios de tarifa.</p>}
-   <div className="tq-research-note"><WifiOff size={16}/> <strong>Sin conexión MT5.</strong> Sincronización automática de especificaciones, spread, comisiones, swap y cotización: <strong>Próximamente.</strong></div>
+   {snapshot?<div className="tq-research-note"><ShieldCheck size={17}/><div><strong>Especificación real de MT5 · {snapshot.name}</strong><p>Spread actual: <b>{snapshot.spread} puntos</b> · Punto: {snapshot.point} · Tick size: {snapshot.trade_tick_size} · Valor tick: {snapshot.trade_tick_value} ({accountCurrency}) · Contrato: {snapshot.trade_contract_size} · Swap L/S: {snapshot.swap_long} / {snapshot.swap_short} (modo MT5: {snapshot.swap_mode}).</p><p><b>Atención:</b> comisión por operación no disponible universalmente en symbol_info; slippage y spread histórico tampoco se garantizan. Los datos de swaps requieren interpretación según su modo de cálculo.</p><button type="button" className="btn btn-outline btn-small" onClick={()=>{const pipSize=snapshot.digits===5||snapshot.digits===3?snapshot.point*10:snapshot.point;const from=rows.find(r=>r.symbol===snapshot.name)||{...BASE_COSTS[1],symbol:snapshot.name,commission_roundtrip_usd:0,slippage_pips:0,swap_long_usd:0,swap_short_usd:0,quote_to_usd:1};const row={...from,spread_pips:Number((snapshot.spread*snapshot.point/pipSize).toFixed(5)),pip_size:pipSize,contract_size:snapshot.trade_contract_size};set({template:"custom",auto_mt5:true,use_in_backtest:false,instruments:[...rows.filter(r=>r.symbol!==snapshot.name),row]})}}>Copiar spread y contrato MT5 al editor (requiere revisar comisión)</button></div></div>:<div className="tq-research-note"><ShieldAlert size={16}/> Selecciona un instrumento de una cuenta MT5 conectada para consultar sus especificaciones.</div>}
    <label className="tq-adv-field tq-cost-fallback"><span>Coste genérico round-trip, cuando catálogo está desactivado (bps)</span><input type="number" min={0} max={100} step={.1} value={fallbackBps} onChange={e=>onFallbackChange(Math.max(0,Math.min(100,Number(e.target.value))))}/></label>
    <label className="tq-cost-apply"><input type="checkbox" checked={c.use_in_backtest} onChange={e=>set({use_in_backtest:e.target.checked})}/><span>Aplicar el catálogo al backtest. Desactivado: conserva el coste genérico del laboratorio ({fmt(fallbackBps)} bps por operación).</span></label>
    <div className="tq-cost-table-wrap"><table className="tq-cost-table"><thead><tr><th>Instrumento</th><th>Spread (pips)</th><th>Comisión USD / lote ida y vuelta</th><th>Slippage (pips)</th><th>Swap L USD/lote/día</th><th>Swap S USD/lote/día</th><th></th></tr></thead><tbody>
