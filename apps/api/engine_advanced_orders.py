@@ -37,7 +37,7 @@ def simulate_advanced_orders(
     trail_enabled,trail_activation_unit,trail_activation,trail_distance_unit,trail_distance,
     dca_enabled,dca_levels,dca_size_multiplier,dca_spacing_unit,dca_spacing,
     pyramid_enabled,pyramid_levels,pyramid_size_multiplier,pyramid_spacing_unit,pyramid_spacing,
-    tp_from_average
+    tp_from_average,trace=None
 ):
     n=end-start
     outcome=np.empty(n,np.float64)
@@ -233,6 +233,15 @@ def simulate_advanced_orders(
             result=side*(price*total_qty-sum_entry_qty)-sum_entry_qty*cost_bps/10000.
             r=result/max(original_nominal_risk,1e-15)
             outcome[count]=r
+            if trace is not None:
+                trace[count,0]=entry_bar
+                trace[count,1]=i
+                trace[count,2]=initial_entry
+                trace[count,3]=price
+                trace[count,4]=side
+                trace[count,5]=avg
+                trace[count,6]=total_qty
+                trace[count,7]=(sum_entry_qty*cost_bps/10000.)/max(original_nominal_risk,1e-15)
             exit_day[count]=days[i]
             count+=1
             if fixed_sizing:
