@@ -24,6 +24,14 @@ from optimization_objectives import validate_objective,objective_score,reproduci
 from funding_simulator import validate_funding,simulate_funding
 from advanced_modifiers import validate_advanced,is_active,execution_arguments,ENTRY_CODES
 from engine_advanced_orders import simulate_advanced_orders
+from research_validation import (
+    validate_quality, validate_walkforward, validate_multiverse, validate_costs,
+    estimated_roundtrip_bps, realized_quality, evaluate_quality,
+)
+from research_robustness import (
+    walkforward_bounds, walkforward_report, synthetic_ohlc,
+    gaussian_hmm_regimes, stylized_fact_score, multiverse_report,
+)
 
 ORDER = list(INTERVALS)
 
@@ -210,6 +218,12 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     multi = cfg.get("multi_tf", "individual")
     optimization = validate_objective(cfg.get("optimization_objective", "balanced"))
     funding=validate_funding(cfg.get("funding"))
+    quality_cfg=validate_quality(cfg.get("quality"))
+    wf_cfg=validate_walkforward(cfg.get("walk_forward"))
+    mv_cfg=validate_multiverse(cfg.get("multiverse"))
+    costs_cfg=validate_costs(cfg.get("costs"))
+    if costs_cfg["use_in_backtest"] and not any(r["symbol"].upper()==cfg["symbol"].upper() for r in costs_cfg["instruments"]):
+        raise ValueError("El instrumento no tiene especificaciones de costes; edita el catálogo o desactiva su uso.")
     modifiers=validate_advanced(cfg.get("advanced_modifiers"))
     advanced_active=is_active(modifiers)
     if modeling=="open" and (any(x!="market" for x in modifiers["entry_modes"]) or modifiers["dca_enabled"] or modifiers["pyramid_enabled"]):
@@ -280,11 +294,12 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
 
     max_gains=np.array([risk_rules[x] for x in ("max_daily_gain_pct","max_weekly_gain_pct","max_monthly_gain_pct","max_account_gain_pct")],dtype=np.float64)
     max_losses=np.array([risk_rules[x] for x in ("max_daily_loss_pct","max_weekly_loss_pct","max_monthly_loss_pct","max_account_loss_pct")],dtype=np.float64)
+    current_cost_bps=float(cfg["cost_bps"])
 
     def simulate_configured(signals,op,hi,lo,close,atr,days,begin,end,side,pair,
                             entry_variant,allow_entry,forced_exit,weeks,months):
         shared=(signals,op,hi,lo,close,atr,days,begin,end,
-                exit_code,pair[0],pair[1],cfg["cost_bps"],side,sampling_model,
+                exit_code,pair[0],pair[1],estimated_roundtrip_bps(costs_cfg,cfg["symbol"],cost_reference,side,cfg["cost_bps"]),side,sampling_model,
                 cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
                 capital["breakeven_enabled"],capital["breakeven_r"],
                 capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
@@ -306,6 +321,10 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         op,hi,lo,close = (df[k].to_numpy() for k in ("open","high","low","close"))
         allow_entry,forced_exit,days,weeks,months=time_arrays(df,source_timezone,schedule)
         atr = atr_wilder(hi,lo,close,14)
+        # Calibrate user-specified contract costs from IS prices only; freeze for OOS.
+        cost_reference=float(np.median(op[:cut]))
+        is_prices_cost={side:estimated_roundtrip_bps(costs_cfg,cfg["symbol"],
+                         cost_reference,side,cfg["cost_bps"]) for side in directions}
         higher_bias = confirmed_higher_bias(source,df,htf) if htf else None
         references = {
             k: sweep_reference(df,k,source_timezone,tf)
@@ -350,6 +369,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 score = -1e8 + metrics_is["trades"]
             return dict(
                 gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),signals=signals,in_sample=metrics_is,
+                trades_is=r_is,days_is=d_is,estimated_cost_bps=is_prices_cost[side],
                 optimization_metrics=optimization_metrics,
                 dataframe=(op,hi,lo,close,atr,days,cut,n,allow_entry,forced_exit,weeks,months),
                 timeframe=tf,context=htf,model=job_type,
