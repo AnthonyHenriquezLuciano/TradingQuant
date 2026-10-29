@@ -22,6 +22,8 @@ from engine_capital import normalize_capital,normalize_risk_rules,MODE_CODES,exi
 from engine_schedule import time_arrays,validate_schedule
 from optimization_objectives import validate_objective,objective_score,reproducible_seed,_daily_returns
 from funding_simulator import validate_funding,simulate_funding
+from advanced_modifiers import validate_advanced,is_active,execution_arguments,ENTRY_CODES
+from engine_advanced_orders import simulate_advanced_orders
 
 ORDER = list(INTERVALS)
 
@@ -208,6 +210,11 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     multi = cfg.get("multi_tf", "individual")
     optimization = validate_objective(cfg.get("optimization_objective", "balanced"))
     funding=validate_funding(cfg.get("funding"))
+    modifiers=validate_advanced(cfg.get("advanced_modifiers"))
+    advanced_active=is_active(modifiers)
+    if modeling=="open" and (any(x!="market" for x in modifiers["entry_modes"]) or modifiers["dca_enabled"] or modifiers["pyramid_enabled"]):
+        raise ValueError("Stop/Limit y escaleras DCA/Pirámide requieren modelado OHLC (no solo precios de apertura).")
+    advanced_args=execution_arguments(modifiers)
     if mode not in ("random", "genetic"):
         raise ValueError("Motor de búsqueda no admitido.")
     if modeling not in ("ohlc", "open"):
@@ -274,6 +281,22 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     max_gains=np.array([risk_rules[x] for x in ("max_daily_gain_pct","max_weekly_gain_pct","max_monthly_gain_pct","max_account_gain_pct")],dtype=np.float64)
     max_losses=np.array([risk_rules[x] for x in ("max_daily_loss_pct","max_weekly_loss_pct","max_monthly_loss_pct","max_account_loss_pct")],dtype=np.float64)
 
+    def simulate_configured(signals,op,hi,lo,close,atr,days,begin,end,side,pair,
+                            entry_variant,allow_entry,forced_exit,weeks,months):
+        shared=(signals,op,hi,lo,close,atr,days,begin,end,
+                exit_code,pair[0],pair[1],cfg["cost_bps"],side,sampling_model,
+                cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
+                capital["breakeven_enabled"],capital["breakeven_r"],
+                capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
+                capital["max_trades_per_day"],capital["cooldown_bars"],
+                cfg["prop_daily_pct"],cfg["prop_max_pct"],capital["stop_after_daily_pct"],
+                allow_entry,forced_exit,weeks,months,max_gains,max_losses,
+                int(risk_rules["max_consecutive_wins"]),int(risk_rules["max_consecutive_losses"]))
+        if advanced_active:
+            return simulate_advanced_orders(*shared,entry_variant,*advanced_args)
+        return simulate_capital(*shared)
+
+
     for (job_type, tf, htf), max_eval in zip(jobs,per):
         df = resample(source, tf)
         n = len(df)
@@ -288,11 +311,12 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             k: sweep_reference(df,k,source_timezone,tf)
             for k in families if k in SITUATIONS
         }
-        seen: set[tuple[int,int,int,int,float,float]] = set()
+        seen: set[tuple] = set()
         evaluated: list[dict] = []
 
         def assess(gene: tuple[int,int,int], side: int, pair: tuple[float,float]) -> dict | None:
-            key = (*gene, side, *pair)
+            entry_variant=ENTRY_CODES[rng.choice(modifiers["entry_modes"])]
+            key = (*gene, side, *pair, entry_variant)
             if key in seen:
                 return None
             seen.add(key)
@@ -306,19 +330,12 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             if higher_bias is not None:
                 signals = np.where(signals == higher_bias,signals,0).astype(np.int8)
             min_rr=risk_rules["min_reward_risk_ratio"]
-            estimated_rr=pair[1] if exit_code in (0,2) else pair[1]/pair[0]
+            estimated_rr=modifiers["fixed_rr"] if modifiers["fixed_rr_enabled"] else pair[1] if exit_code in (0,2) else pair[1]/pair[0]
             if min_rr>0 and estimated_rr+1e-9<min_rr:
                 return None
-            r_is,d_is = simulate_capital(
-                signals,op,hi,lo,close,atr,days,0,cut,
-                exit_code,pair[0],pair[1],cfg["cost_bps"],side,sampling_model,
-                cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
-                capital["breakeven_enabled"],capital["breakeven_r"],
-                capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
-                capital["max_trades_per_day"],capital["cooldown_bars"],
-                cfg["prop_daily_pct"],cfg["prop_max_pct"],capital["stop_after_daily_pct"],
-                allow_entry,forced_exit,weeks,months,
-                max_gains,max_losses,int(risk_rules["max_consecutive_wins"]),int(risk_rules["max_consecutive_losses"]),
+            r_is,d_is = simulate_configured(
+                signals,op,hi,lo,close,atr,days,0,cut,side,pair,
+                entry_variant,allow_entry,forced_exit,weeks,months,
             )
             metrics_is = summarize(
                 r_is,d_is,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -332,7 +349,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             if metrics_is["trades"] < max(4,cfg["min_trades"]):
                 score = -1e8 + metrics_is["trades"]
             return dict(
-                gene=gene,side=side,exit_pair=pair,score=float(score),signals=signals,in_sample=metrics_is,
+                gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),signals=signals,in_sample=metrics_is,
                 optimization_metrics=optimization_metrics,
                 dataframe=(op,hi,lo,close,atr,days,cut,n,allow_entry,forced_exit,weeks,months),
                 timeframe=tf,context=htf,model=job_type,
@@ -401,16 +418,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         kind,fast,slow = gene
         op,hi,lo,cl,atr,days,cut,n,allow_entry,forced_exit,weeks,months = trial["dataframe"]
         pair=trial["exit_pair"]
-        r_oos,d_oos = simulate_capital(
-            trial["signals"],op,hi,lo,cl,atr,days,cut,n,
-            exit_code,pair[0],pair[1],cfg["cost_bps"],trial["side"],sampling_model,
-            cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
-            capital["breakeven_enabled"],capital["breakeven_r"],
-            capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
-            capital["max_trades_per_day"],capital["cooldown_bars"],
-            cfg["prop_daily_pct"],cfg["prop_max_pct"],capital["stop_after_daily_pct"],
-            allow_entry,forced_exit,weeks,months,
-            max_gains,max_losses,int(risk_rules["max_consecutive_wins"]),int(risk_rules["max_consecutive_losses"]),
+        r_oos,d_oos = simulate_configured(
+            trial["signals"],op,hi,lo,cl,atr,days,cut,n,trial["side"],pair,
+            trial["entry_variant"],allow_entry,forced_exit,weeks,months,
         )
         metrics_oos = summarize(
             r_oos,d_oos,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -448,7 +458,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             id="candidate-"+str(i+1),family=FAMILIES[kind],params=params,
             timeframe=trial["timeframe"],context_timeframe=trial["context"],
             direction="long" if trial["side"] == 1 else "short",
-            model=trial["model"],exit_mode=capital["exit_mode"],
+            model=trial["model"],entry_mode=next(k for k,v in ENTRY_CODES.items() if v==trial["entry_variant"]),
+            advanced_modifiers=modifiers,exit_mode=capital["exit_mode"],
             exit_parameters={exit_keys(capital)[0]:pair[0],exit_keys(capital)[1]:pair[1]},
             optimization_objective=optimization,optimization_score=trial["score"],
             optimization_metrics_is=trial["optimization_metrics"],
@@ -458,6 +469,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             accepted=not reasons,reasons=reasons,
         ))
     warnings += [
+        "Avanzado: Stop/Limit requieren ejecución OHLC intrabar conservadora; si se llenan durante una barra, SL/TP se evalúa desde la siguiente. DCA/pirámide comparten presupuesto de riesgo y no simulan margen, slippage ni liquidez.",
         "Objetivo de optimización: "+optimization+"; ranking, selección genética y shortlist usan solo datos IS.",
         "Sharpe/Sortino/Calmar usan anualización 252 con PnL realizado al cierre del trade; no reconstruyen mark-to-market diario.",
         "Pass Rate de fondeo usa las fases, límites, consistencia, días mínimos y percentiles configurados; es un proxy Monte Carlo con balance realizado, NO cumplimiento íntegro de reglas de la firma.",
