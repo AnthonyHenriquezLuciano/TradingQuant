@@ -36,6 +36,43 @@ from research_robustness import (
 ORDER = list(INTERVALS)
 
 
+def build_trade_ledger(outcomes,trace,timestamps,initial_deposit,risk_pct,sizing):
+    """Faithful executed-trade accounting from the SAME Numba kernel as metrics.
+
+    A trace comes from the independent held-out window (OOS); it must never
+    be displayed as a whole-sample backtest. No fake entry/exit timestamps.
+    """
+    ledger=[]
+    balance=float(initial_deposit)
+    for idx,r in enumerate(outcomes):
+        record=trace[idx]
+        if not np.all(np.isfinite(record)):
+            raise ValueError("El motor produjo una operación sin traza auditable.")
+        entry_idx,exit_idx=int(record[0]),int(record[1])
+        risk_base=balance if sizing=="compound" else initial_deposit
+        cash_risk=risk_base*risk_pct/100.
+        pnl=float(r)*cash_risk
+        fees=float(record[7])*cash_risk
+        gross=pnl+fees
+        balance=max(0.,balance+pnl)
+        ledger.append(dict(
+            number=idx+1,
+            entry_time=np.datetime_as_string(np.datetime64(timestamps[entry_idx]),unit="m"),
+            exit_time=np.datetime_as_string(np.datetime64(timestamps[exit_idx]),unit="m"),
+            entry_price=round(float(record[2]),8),
+            exit_price=round(float(record[3]),8),
+            average_price=round(float(record[5]),8),
+            direction="long" if record[4]>0 else "short",
+            result="win" if pnl>0 else "loss" if pnl<0 else "flat",
+            pnl_usd=round(pnl,4),gross_usd=round(gross,4),
+            costs_usd=round(fees,4),r_multiple=round(float(r),6),
+            balance_usd=round(balance,4),
+            duration_bars=max(1,exit_idx-entry_idx+1),
+        ))
+    return ledger
+
+
+
 def filter_period(source: pl.DataFrame, cfg: dict[str, Any]) -> pl.DataFrame:
     frame = source
     for key, op in (("start_date", "gte"), ("end_date", "lte")):
@@ -211,7 +248,7 @@ def derive_scenarios(timeframes: list[str], mode: str) -> list[tuple[str, str, s
     return jobs
 
 
-def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
+def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) -> dict:
     mode = cfg.get("mode", "random")
     modeling = cfg.get("modeling", "ohlc")
     sizing = cfg.get("sizing", "compound")
@@ -297,7 +334,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     current_cost_bps=float(cfg["cost_bps"])
 
     def simulate_configured(signals,op,hi,lo,close,atr,days,begin,end,side,pair,
-                            entry_variant,allow_entry,forced_exit,weeks,months,cost_reference):
+                            entry_variant,allow_entry,forced_exit,weeks,months,cost_reference,trace=None):
         shared=(signals,op,hi,lo,close,atr,days,begin,end,
                 exit_code,pair[0],pair[1],estimated_roundtrip_bps(costs_cfg,cfg["symbol"],cost_reference,side,cfg["cost_bps"]),side,sampling_model,
                 cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
@@ -308,8 +345,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 allow_entry,forced_exit,weeks,months,max_gains,max_losses,
                 int(risk_rules["max_consecutive_wins"]),int(risk_rules["max_consecutive_losses"]))
         if advanced_active:
-            return simulate_advanced_orders(*shared,entry_variant,*advanced_args)
-        return simulate_capital(*shared)
+            return simulate_advanced_orders(*shared,entry_variant,*advanced_args,trace)
+        return simulate_capital(*shared,trace=trace)
 
 
     for (job_type, tf, htf), max_eval in zip(jobs,per):
@@ -431,6 +468,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                     if trial is not None:
                         evaluated.append(trial)
         all_trials.extend(evaluated)
+        if on_progress is not None:
+            on_progress(len(all_trials),budget,"explorando")
 
     # DSR's multiple-test correction counts attempted strategies on this SAME market.
     # Applying quality to all IS candidates before selecting the shortlist avoids
@@ -446,21 +485,28 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         if not trial["quality_reasons_is"]:
             valid_trials.append(trial)
     # Only IS metrics determine the shortlist; never rank by held-out OOS.
-    shortlist = sorted(valid_trials,key=lambda t:(t["score"],t["in_sample"]["trades"]),reverse=True)[:12]
+    shortlist = sorted(valid_trials,key=lambda t:(t["score"],t["in_sample"]["trades"]),reverse=True)[:min(50,budget)]
     if len(valid_trials)<len(all_trials):
         warnings.append(f"Filtro de calidad IS: {len(all_trials)-len(valid_trials)} de {len(all_trials)} candidatos descartados antes de evaluar OOS.")
     if not valid_trials and all_trials:
         warnings.append("Los filtros de calidad rechazaron todos los candidatos en IS; reduce restricciones si deseas ampliar la exploración.")
     candidates = []
+    if on_progress is not None:
+        on_progress(len(all_trials),budget,"validando")
     for i,trial in enumerate(shortlist):
         gene = trial["gene"]
         kind,fast,slow = gene
         op,hi,lo,cl,atr,days,cut,n,allow_entry,forced_exit,weeks,months = trial["dataframe"]
         pair=trial["exit_pair"]
+        trade_trace=np.full((max(1,n-cut),8),np.nan,dtype=np.float64)
         r_oos,d_oos = simulate_configured(
             trial["signals"],op,hi,lo,cl,atr,days,cut,n,trial["side"],pair,
-            trial["entry_variant"],allow_entry,forced_exit,weeks,months,trial["reference_cost_price"],
+            trial["entry_variant"],allow_entry,forced_exit,weeks,months,trial["reference_cost_price"],trade_trace,
         )
+        trade_ledger=build_trade_ledger(r_oos,trade_trace,trial["timestamp"],
+                                        cfg["initial_deposit"],cfg["risk_pct"],sizing)
+        if on_progress is not None:
+            on_progress(i+1,len(shortlist),"validando")
         metrics_oos = summarize(
             r_oos,d_oos,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
             sizing,cfg["initial_deposit"],
@@ -595,6 +641,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             quality_is=trial["quality_is"],quality_oos=quality_oos,
             walk_forward=wf_report,multiverse=multiverse,
             estimated_cost_bps=trial["estimated_cost_bps"],
+            ledger=trade_ledger,ledger_scope="OOS",
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
         ))
@@ -618,6 +665,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     ]
     return dict(
         tested=len(all_trials),accepted=sum(1 for c in candidates if c["accepted"]),
+        total_shortlist=len(shortlist),
         optimization_objective=optimization,funding_config=funding,quality_config=quality_cfg,
         cost_config=costs_cfg,walk_forward_config=wf_cfg,multiverse_config=mv_cfg,candidates=candidates,warnings=warnings,
     )
