@@ -63,7 +63,25 @@ function Calendar({ledger}:{ledger:TradeRow[]}){
 }
 export function ResearchResults({run,onSelect,onEdit}:{run:QuantRun;onSelect:(id:string)=>void;onEdit:()=>void}){
  const [layout,setLayout]=useState<"grid"|"list">("grid"),[search,setSearch]=useState(""),[onlyAccepted,setOnlyAccepted]=useState(false),[win,setWin]=useState(0),[dd,setDd]=useState(100),[minPF,setMinPF]=useState(0),[minTrades,setMinTrades]=useState(0),[minSharpe,setMinSharpe]=useState(-10),[minFunding,setMinFunding]=useState(0),[maxP20,setMaxP20]=useState(0),[sort,setSort]=useState("score");
- const found=useMemo(()=>run.candidates.filter(c=>(!onlyAccepted||c.accepted)&&title(c).toLowerCase().includes(search.toLowerCase())&&c.out_of_sample.win_rate>=win&&c.out_of_sample.max_drawdown_pct<=dd&&(c.out_of_sample.profit_factor??0)>=minPF&&c.out_of_sample.trades>=minTrades&&(c.quality_oos?.sharpe??-100)>=minSharpe&&(!run.config.funding?.enabled||((c.funding_evaluation_oos?.pass_rate_pct??0)>=minFunding&&(maxP20<=0||(c.funding_evaluation_oos?.p20_days!=null&&c.funding_evaluation_oos.p20_days<=maxP20)))).sort((a,b)=>sort==="sharpe"?(b.quality_oos?.sharpe??-999)-(a.quality_oos?.sharpe??-999):sort==="pnl"?b.out_of_sample.net_return_pct-a.out_of_sample.net_return_pct:sort==="dd"?a.out_of_sample.max_drawdown_pct-b.out_of_sample.max_drawdown_pct:sort==="fund"?(b.funding_evaluation_oos?.pass_rate_pct??0)-(a.funding_evaluation_oos?.pass_rate_pct??0):(b.optimization_score??-1e9)-(a.optimization_score??-1e9)),[run.candidates,run.config.funding,search,onlyAccepted,win,dd,minPF,minTrades,minSharpe,minFunding,maxP20,sort]);
+ const found=useMemo(()=>{
+   const filtered=run.candidates.filter(c=>{
+     const base=(!onlyAccepted||c.accepted)&&title(c).toLowerCase().includes(search.toLowerCase())&&
+      c.out_of_sample.win_rate>=win&&c.out_of_sample.max_drawdown_pct<=dd&&
+      (c.out_of_sample.profit_factor??0)>=minPF&&c.out_of_sample.trades>=minTrades&&
+      (c.quality_oos?.sharpe??-100)>=minSharpe;
+     const fundingOK=!run.config.funding?.enabled||(
+      (c.funding_evaluation_oos?.pass_rate_pct??0)>=minFunding&&
+      (maxP20<=0||(c.funding_evaluation_oos?.p20_days!=null&&c.funding_evaluation_oos.p20_days<=maxP20))
+     );
+     return base&&fundingOK;
+   });
+   return filtered.sort((a,b)=>
+    sort==="sharpe"?(b.quality_oos?.sharpe??-999)-(a.quality_oos?.sharpe??-999):
+    sort==="pnl"?b.out_of_sample.net_return_pct-a.out_of_sample.net_return_pct:
+    sort==="dd"?a.out_of_sample.max_drawdown_pct-b.out_of_sample.max_drawdown_pct:
+    sort==="fund"?(b.funding_evaluation_oos?.pass_rate_pct??0)-(a.funding_evaluation_oos?.pass_rate_pct??0):
+    (b.optimization_score??-1e9)-(a.optimization_score??-1e9));
+ },[run.candidates,run.config.funding,search,onlyAccepted,win,dd,minPF,minTrades,minSharpe,minFunding,maxP20,sort]);
  return <div className="tq-results">
  <div className="tq-r-heading"><div><span className="tq-r-eyebrow">LABORATORIO / EXPLORACIÓN TERMINADA</span><h1>Ranking de resultados</h1><p>{run.config.name} · {run.config.symbol} · {run.config.timeframe.toUpperCase()} · {run.config.mode==="genetic"?"Evolución genética":"Exploración aleatoria"}</p></div><button className="tq-r-secondary" onClick={onEdit}><SlidersHorizontal size={16}/> Modificar configuración</button></div>
  <div className="tq-r-metrics"><Metric label="Progreso" value="100%" sub="Listo"/><Metric label="Probadas" value={String(run.tested)} sub="Evaluaciones reales"/><Metric label="Pasan filtros" value={String(run.accepted)} sub="Candidatos aceptados"/><Metric label="Top candidatos" value={String(run.candidates.length)} sub="Ranking y detalle"/><Metric label="Tiempo" value={run.elapsed_seconds==null?"—":Math.floor(run.elapsed_seconds/60)+"m "+String(run.elapsed_seconds%60).padStart(2,"0")+"s"} sub="Tiempo real de ejecución"/></div>
