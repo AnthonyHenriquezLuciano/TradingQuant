@@ -23,11 +23,13 @@ from advanced_modifiers import validate_advanced
 from research_validation import validate_quality,validate_walkforward,validate_multiverse,validate_costs
 from execution_jobs import JOBS
 from preflight import preflight
+from dataset_uploads import UploadManager,UploadInit,CHUNK_BYTES
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 MAX_BYTES = 150 * 1024 * 1024
 app = FastAPI(title="TradingQuant Scientific API", version="0.1.0")
+UPLOADS=UploadManager(DATA_DIR)
 class PrivateResearchMiddleware(BaseHTTPMiddleware):
     """Optional single-user API access control for public Docker deployments.
 
@@ -53,8 +55,8 @@ app.add_middleware(
     allow_origins=[x.strip() for x in os.getenv("TRADINGQUANT_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if x.strip()],
     allow_origin_regex=r"https://tradingquant(?:-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type","Authorization"],
+    allow_methods=["GET", "POST", "PUT"],
+    allow_headers=["Content-Type","Authorization","X-Chunk-SHA256"],
 )
 
 class IndicatorRanges(BaseModel):
@@ -178,6 +180,29 @@ def check_access():
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "0.1.0", "live_trading_enabled": False}
+
+
+@app.post("/api/datasets/uploads",status_code=201)
+def begin_chunked_upload(options:UploadInit):
+    """Return upload id and max chunk size. Browser never sends one huge POST."""
+    return {**UPLOADS.begin(options),"chunk_bytes":CHUNK_BYTES}
+
+@app.put("/api/datasets/uploads/{upload_id}/chunks/{index}")
+async def upload_chunk(upload_id:str,index:int,request:Request):
+    size_header=request.headers.get("content-length")
+    if size_header and int(size_header)>CHUNK_BYTES:
+        raise HTTPException(413,"Bloque demasiado grande (máximo 2 MiB).")
+    body=await request.body()
+    sha=request.headers.get("x-chunk-sha256","")
+    return UPLOADS.write(upload_id,index,body,sha)
+
+@app.post("/api/datasets/uploads/{upload_id}/complete",status_code=202)
+def complete_chunked_upload(upload_id:str):
+    return UPLOADS.finish(upload_id)
+
+@app.get("/api/datasets/uploads/{upload_id}")
+def check_chunked_upload(upload_id:str):
+    return UPLOADS.status(upload_id)
 
 @app.post("/api/datasets/upload")
 async def upload_dataset(file: UploadFile = File(...)):
