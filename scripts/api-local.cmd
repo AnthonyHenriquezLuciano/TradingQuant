@@ -2,6 +2,7 @@
 title TradingQuant - API local FastAPI
 cd /d "%~dp0..\apps\api"
 set "TRADINGQUANT_REQUIRE_AUTH=0"
+set "TRADINGQUANT_REQUIRE_ACCOUNT=1"
 set "TRADINGQUANT_LOCAL_MODE=1"
 set "TRADINGQUANT_MAX_UPLOAD_MB=1024"
 set "TRADINGQUANT_DATA_DIR=%CD%\data\uploads"
