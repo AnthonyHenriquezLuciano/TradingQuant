@@ -18,6 +18,18 @@ Windows 10/11, Node.js LTS con npm, Python 3.12 (64 bits) con el lanzador py, Gi
 
 La página publica de Vercel es distinta a la página local. Para trabajar sin Render hay que abrir http://127.0.0.1:3000.
 
+## Importación directa sin subir por el navegador
+
+Para CSV M1 de varios años puedes evitar por completo la transferencia HTTP:
+
+1. Copia el archivo CSV original de MetaTrader 5 a **apps/api/data/inbox/** (el iniciador crea la carpeta automáticamente).
+2. Abre **http://127.0.0.1:3000** → **Datos históricos**.
+3. En **Importación directa desde el disco**, pulsa **Buscar archivos CSV locales**.
+4. Selecciona el archivo y pulsa **Importar del disco**. La API crea una referencia/copia local y valida filas en segundo plano.
+5. El dataset aparece disponible en el Creador de Algoritmos.
+
+La aplicación local utiliza siempre **http://127.0.0.1:8000**. No hay campo de token, URL de Render ni integración requerida con Vercel. Puedes apagar los servicios en la nube sin afectar tus investigaciones locales. No borres la carpeta **apps/api/data/** si quieres conservar tus datos.
+
 ## Archivos e investigación
 
 Los CSV se guardan en apps/api/data/uploads, la caché Numba en apps/api/data/numba y los resultados de sesión se guardan en el navegador local. No se sincronizan automáticamente con los datos de la web pública. El límite de CSV local es de 1024 MiB y se ajusta en scripts/api-local.cmd con TRADINGQUANT_MAX_UPLOAD_MB. No es una garantía de poder ejecutar backtests de archivos tan grandes con cualquier equipo: el motor también necesita memoria para sus estructuras de cálculo.
