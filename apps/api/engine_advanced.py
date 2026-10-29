@@ -20,7 +20,8 @@ from engine import (
 from market_setups import SITUATIONS, SOURCE_ZONES, sweep_reference, sweep_signals
 from engine_capital import normalize_capital,normalize_risk_rules,MODE_CODES,exit_keys,sample_exit,mutate_exit,simulate_capital
 from engine_schedule import time_arrays,validate_schedule
-from optimization_objectives import validate_objective,objective_score,reproducible_seed
+from optimization_objectives import validate_objective,objective_score,reproducible_seed,_daily_returns
+from funding_simulator import validate_funding,simulate_funding
 
 ORDER = list(INTERVALS)
 
@@ -206,6 +207,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     sizing = cfg.get("sizing", "compound")
     multi = cfg.get("multi_tf", "individual")
     optimization = validate_objective(cfg.get("optimization_objective", "balanced"))
+    funding=validate_funding(cfg.get("funding"))
     if mode not in ("random", "genetic"):
         raise ValueError("Motor de búsqueda no admitido.")
     if modeling not in ("ohlc", "open"):
@@ -325,7 +327,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             score, optimization_metrics = objective_score(
                 optimization,r_is,d_is,days[:cut],cfg["risk_pct"],sizing,
                 cfg["initial_deposit"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
-                seed=reproducible_seed(gene,side,pair),
+                seed=reproducible_seed(gene,side,pair),funding_config=funding,
             )
             if metrics_is["trades"] < max(4,cfg["min_trades"]):
                 score = -1e8 + metrics_is["trades"]
@@ -418,6 +420,16 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             r_oos,cfg["risk_pct"],cfg["mc_iterations"],cfg["prop_max_pct"],1000+i,sizing,
         )
         reasons = []
+        # OOS funding diagnostics never influence candidate score or genetic selection.
+        funding_is=trial["optimization_metrics"].get("funding_evaluation_is")
+        funding_oos=None
+        if funding["enabled"]:
+            observed=np.unique(days[cut:n])
+            oos_daily=_daily_returns(r_oos,d_oos,observed,cfg["risk_pct"],sizing)
+            funding_oos=simulate_funding(oos_daily,np.isin(observed,d_oos),funding,
+                                         seed=reproducible_seed(trial["gene"],trial["side"],pair)+1)
+            if funding_is is not None and not funding_is["eligible"]:
+                reasons.append("Tasa mínima de aprobación o tiempo P"+str(funding["pass_day_percentile"])+" no alcanzado en IS")
         if metrics_oos["trades"]<cfg["min_trades"]:
             reasons.append("Muestra OOS insuficiente")
         if metrics_oos["expectancy_r"]<=0:
@@ -440,6 +452,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             exit_parameters={exit_keys(capital)[0]:pair[0],exit_keys(capital)[1]:pair[1]},
             optimization_objective=optimization,optimization_score=trial["score"],
             optimization_metrics_is=trial["optimization_metrics"],
+            funding_evaluation_is=funding_is,funding_evaluation_oos=funding_oos,
             in_sample=trial["in_sample"],
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
@@ -447,7 +460,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     warnings += [
         "Objetivo de optimización: "+optimization+"; ranking, selección genética y shortlist usan solo datos IS.",
         "Sharpe/Sortino/Calmar usan anualización 252 con PnL realizado al cierre del trade; no reconstruyen mark-to-market diario.",
-        "Pass Rate es un proxy Monte Carlo IS: 128 simulaciones de dos fases 8% y 5%, máximo 60 días por fase, límites diarios y totales realizados configurados. No estima drawdown flotante ni reglas completas de la firma.",
+        "Pass Rate de fondeo usa las fases, límites, consistencia, días mínimos y percentiles configurados; es un proxy Monte Carlo con balance realizado, NO cumplimiento íntegro de reglas de la firma.",
         "Evaluación exploratoria: el split IS/OOS no sustituye walk-forward ni forward testing.",
         "Comisiones, spread variable, swaps, slippage y ejecución tick a tick no están modelados.",
         "El capital inicial y sizing afectan el balance estimado, no generan cotizaciones reales.",
@@ -461,5 +474,5 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     ]
     return dict(
         tested=len(all_trials),accepted=sum(1 for c in candidates if c["accepted"]),
-        optimization_objective=optimization,candidates=candidates,warnings=warnings,
+        optimization_objective=optimization,funding_config=funding,candidates=candidates,warnings=warnings,
     )
