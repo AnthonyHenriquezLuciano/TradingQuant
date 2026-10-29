@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SessionOverview, type AlgoSession } from "./session-overview";
+import { AccountCenter, type MT5Account, type MT5Symbol } from "./account-center";
 import { StrategyConfigurator, DEFAULT_INDICATOR_RANGES, type AlgoConfig } from "./strategy-configurator";
 import {DEFAULT_CAPITAL} from "./capital-management";
 import {DEFAULT_SCHEDULE} from "./schedule-config";
@@ -24,7 +25,7 @@ import {ResearchResults,StrategyDetail} from "./research-results";
 import type {AssetDiagnostics} from "./dataset-diagnostics";
 import {readExperiments,writeExperiments} from "./browser-store";
 
-type View = "home" | "sessions" | "builder" | "datasets" | "results" | "validation" | "running" | "detail";
+type View = "accounts" | "home" | "sessions" | "builder" | "datasets" | "results" | "validation" | "running" | "detail";
 type Dataset = { id:string; filename:string; rows:number; start:string; end:string; timeframe:string; uploaded_at:string };
 type FundingAnalysis={
  pass_rate_pct:number;p20_days:number|null;p50_days:number|null;p80_days:number|null;
@@ -48,18 +49,18 @@ type Metrics = { trades:number; win_rate:number; profit_factor:number|null; expe
 type RunResult = { id:string; created_at:string; dataset_id:string; tested:number; accepted:number; candidates:Candidate[]; warnings:string[]; config:Config };
 type Config = AlgoConfig;
 const DEFAULT_API="http://127.0.0.1:8000"; // Only local scientific engine
-const DEFAULT:Config={ name:"Nueva exploración cuantitativa",dataset_id:"",symbol:"XAUUSD",timeframe:"5m",timeframes:["5m"],start_date:"",end_date:"",initial_deposit:5000,mode:"random",optimization_objective:"balanced",modeling:"ohlc",sizing:"compound",multi_tf:"individual",generations:8,candidates:100,families:["ema_cross","rsi_reversion","breakout"],indicator_ranges:DEFAULT_INDICATOR_RANGES,source_timezone:"UTC",macro_indicators:[],macro_rules:{},capital:DEFAULT_CAPITAL,schedule:DEFAULT_SCHEDULE,funding:DEFAULT_FUNDING,advanced_modifiers:DEFAULT_ADVANCED,quality:DEFAULT_QUALITY,walk_forward:DEFAULT_WALK_FORWARD,multiverse:DEFAULT_MULTIVERSE,costs:DEFAULT_COSTS,direction:"both",risk_pct:0.5,rr:1.0,atr_multiplier:1.5,cost_bps:2,is_ratio:70,min_trades:12,mc_iterations:500,prop_daily_pct:3,prop_max_pct:10 };
+const DEFAULT:Config={ name:"Nueva exploración cuantitativa",dataset_id:"",symbol:"",timeframe:"5m",timeframes:["5m"],start_date:"",end_date:"",initial_deposit:5000,mode:"random",optimization_objective:"balanced",modeling:"ohlc",sizing:"compound",multi_tf:"individual",generations:8,candidates:100,families:["ema_cross","rsi_reversion","breakout"],indicator_ranges:DEFAULT_INDICATOR_RANGES,source_timezone:"UTC",macro_indicators:[],macro_rules:{},capital:DEFAULT_CAPITAL,schedule:DEFAULT_SCHEDULE,funding:DEFAULT_FUNDING,advanced_modifiers:DEFAULT_ADVANCED,quality:DEFAULT_QUALITY,walk_forward:DEFAULT_WALK_FORWARD,multiverse:DEFAULT_MULTIVERSE,costs:DEFAULT_COSTS,direction:"both",risk_pct:0.5,rr:1.0,atr_multiplier:1.5,cost_bps:2,is_ratio:70,min_trades:12,mc_iterations:500,prop_daily_pct:3,prop_max_pct:10 };
 const STEPS=[{title:"Mercado y datos",sub:"Fuente y búsqueda"},{title:"Señales",sub:"Hipótesis y reglas"},{title:"Ejecución",sub:"Riesgo y costes"},{title:"Validación",sub:"Pruebas y filtros"}];
 const formatDate=(value:string)=>{const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleDateString("es-DO",{day:"2-digit",month:"short",year:"numeric"})};
 const n2=(x:number|null|undefined,d=2)=>x===null||x===undefined?"—":Number(x).toFixed(d);
 const pct=(x:number|null|undefined)=>x===null||x===undefined?"—":n2(x)+"%";
 const fCurrency=(n:number)=>new Intl.NumberFormat("es-DO").format(n);
 const NAV: {section:string;items:{id:View|null;label:string;icon:LucideIcon;sub?:string}[]}[]=[
- {section:"WORKSPACE",items:[{id:"home",label:"Visión general",icon:LayoutDashboard}]},
+ {section:"PRINCIPAL",items:[{id:"accounts",label:"Cuentas",icon:Wallet},{id:"home",label:"Visión general",icon:LayoutDashboard}]},
  {section:"LABORATORIO",items:[{id:"sessions",label:"Creador de algoritmos",icon:WandSparkles},{id:null,label:"Portafolios",icon:Layers3,sub:"Próximamente"}]},
  {section:"INFRAESTRUCTURA",items:[{id:"datasets",label:"Datos históricos",icon:Database},{id:null,label:"IDE de estrategias",icon:TerminalSquare,sub:"Próximamente"}]}
 ];
-function Brand(){return <div className="brand-mark"><div className="brand-symbol"><Activity size={19} strokeWidth={2.6}/></div><div className="brand-copy">TRADING<span>QUANT</span><small>QUANT RESEARCH PLATFORM</small></div></div>}
+function Brand(){return <div className="brand-mark"><div className="brand-symbol"><Activity size={19} strokeWidth={2.6}/></div><div className="brand-copy">TRADING<span>QUANT</span></div></div>}
 function Badge({children,kind="neutral"}:{children:React.ReactNode;kind?:"neutral"|"accent"|"good"|"warning"}){return <span className={`badge badge-${kind}`}>{children}</span>}
 function SectionHeading({eyebrow,title,description,right}:{eyebrow?:string;title:string;description?:string;right?:React.ReactNode}){return <div className="section-heading"><div><div className="eyebrow">{eyebrow}</div><h2>{title}</h2>{description&&<p>{description}</p>}</div>{right}</div>}
 function Illustration(){
@@ -74,7 +75,7 @@ function Empty({title,description,action,icon:Icon=FlaskConical}:{title:string;d
 function StepNumber({num,active,done}:{num:number;active:boolean;done:boolean}){return <span className={`step-number ${active?"selected":""} ${done?"done":""}`}>{done?<Check size={14}/>:num}</span>}
 function MiniMetric({label,value}:{label:string;value:string}){return <div className="mini-metric"><span>{label}</span><strong>{value}</strong></div>}
 export default function Page(){
- const [view,setView]=useState<View>("home");
+ const [view,setView]=useState<View>("accounts");
  const [mobile,setMobile]=useState(false);
  const [step,setStep]=useState(0);
  const [cfg,setCfg]=useState<Config>(DEFAULT);
@@ -94,8 +95,14 @@ export default function Page(){
  const [notice,setNotice]=useState("");
 
  const [apiStatus,setApiStatus]=useState<"unknown"|"checking"|"online"|"offline">("unknown");
+ const [accounts,setAccounts]=useState<MT5Account[]>([]);
+ const [activeAccountId,setActiveAccountId]=useState<string|null>(null);
+ const [mt5Symbols,setMt5Symbols]=useState<MT5Symbol[]>([]);
+ const [allMt5Symbols,setAllMt5Symbols]=useState<{symbol:string;accounts:string[]}[]>([]);
+ const [accountBusy,setAccountBusy]=useState(false);
+ const [importingMT5,setImportingMT5]=useState(false);
  const API=DEFAULT_API;
- const authHeaders:Record<string,string>={};
+ const authHeaders:Record<string,string>=activeAccountId?{"X-TradingQuant-Account":activeAccountId}:{};
  const [selectedCandidate,setSelectedCandidate]=useState<string|null>(null);
  const [jobStatus,setJobStatus]=useState<{id:string;status:string;phase:string;percent:number;checked:number;total:number;elapsed_seconds:number;error?:string|null}|null>(null);
  const [profile,setProfile]=useState<AssetDiagnostics|null>(null);
@@ -113,12 +120,86 @@ export default function Page(){
  useEffect(()=>{localStorage.setItem("tq_cfg",JSON.stringify(cfg))},[cfg]);
  useEffect(()=>{if(sessionsHydrated)localStorage.setItem("tq_sessions_v1",JSON.stringify(sessions))},[sessions,sessionsHydrated]);
  useEffect(()=>{if(activeSessionId)setSessions(prev=>prev.map(s=>s.id===activeSessionId?{...s,name:cfg.name,symbol:cfg.symbol,config:cfg,updatedAt:new Date().toISOString()}:s))},[cfg,activeSessionId]);
+ async function loadSymbols(accountId:string){
+   try{
+     const r=await fetch(API+"/api/accounts/"+encodeURIComponent(accountId)+"/symbols",{cache:"no-store"});
+     const body=await r.json();
+     if(!r.ok)throw Error(body.detail||"No se pueden cargar los símbolos desde MT5.");
+     const list:MT5Symbol[]=body.symbols||[];
+     setMt5Symbols(list);
+     setCfg(prev=>{
+       const preferred=list.some(s=>s.name===prev.symbol)?prev.symbol:(list.find(s=>s.name==="XAUUSD")?.name||list[0]?.name||"");
+       return {...prev,symbol:preferred};
+     });
+     const all=await fetch(API+"/api/accounts/symbols/all",{cache:"no-store"});
+     if(all.ok){const result=await all.json();setAllMt5Symbols(result.symbols||[])}
+   }catch(e){setError(e instanceof Error?e.message:"MT5 no devolvió instrumentos.")}
+ }
+ async function refreshAccounts(){
+   try{
+     const r=await fetch(API+"/api/accounts/status",{cache:"no-store"});
+     if(!r.ok)throw Error("No se pudo consultar el motor MT5 local.");
+     const result=await r.json();
+     setAccounts(result.accounts||[]);
+     setActiveAccountId(result.active_id||null);
+     if(result.active_id){await loadSymbols(result.active_id)}
+     else {setMt5Symbols([]);setView("accounts")}
+   }catch(e){setError("Inicia TradingQuant con el BAT y abre MetaTrader 5 para conectar una cuenta. "+(e instanceof Error?e.message:""))}
+ }
+ async function connectAccount(form:Record<string,string|number>){
+   setAccountBusy(true);setError("");
+   try{
+     const r=await fetch(API+"/api/accounts/connect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
+     const body=await r.json();
+     if(!r.ok)throw Error(body.detail||"No se pudo vincular MetaTrader 5.");
+     const id=String(body.account.id);
+     setActiveAccountId(id);setAccounts(prev=>[body.account,...prev.filter(a=>a.id!==id)]);
+     setDatasets([]);setCfg(prev=>({...prev,dataset_id:"",symbol:""}));
+     await loadSymbols(id);
+     setNotice("Cuenta "+body.account.login+" conectada en modo lectura. Selecciona sus símbolos desde el creador.");
+   }catch(e){setError(e instanceof Error?e.message:"No se pudo conectar MT5.");throw e}
+   finally{setAccountBusy(false)}
+ }
+ async function activateAccount(id:string){
+   setAccountBusy(true);setError("");
+   try{
+     const r=await fetch(API+"/api/accounts/activate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id})});
+     const body=await r.json();
+     if(!r.ok)throw Error(body.detail||"Abre esta cuenta en el terminal MT5 correcto.");
+     setActiveAccountId(id);setAccounts(prev=>prev.map(a=>a.id===id?body.account:{...a,status:"saved"}));
+     setDatasets([]);setCfg(prev=>({...prev,dataset_id:"",symbol:""}));
+     await loadSymbols(id);setNotice("Cuenta activada: "+id);
+   }catch(e){setError(e instanceof Error?e.message:"No se pudo activar MT5.")}
+   finally{setAccountBusy(false)}
+ }
+ async function importMT5History(){
+   if(!activeAccountId||!cfg.symbol){setError("Selecciona una cuenta MT5 y uno de sus símbolos.");return}
+   setImportingMT5(true);setError("");setNotice("");
+   try{
+     const today=new Date();
+     const start=new Date(today.getTime()-90*86400000);
+     const iso=(d:Date)=>d.toISOString().slice(0,10);
+     const startDate=cfg.start_date||iso(start);
+     const endDate=cfg.end_date||iso(today);
+     const resp=await fetch(API+"/api/accounts/history/import",{
+       method:"POST",headers:{"Content-Type":"application/json",...authHeaders},
+       body:JSON.stringify({account_id:activeAccountId,symbol:cfg.symbol,timeframe:"1m",
+         start:startDate+"T00:00:00Z",end:endDate+"T23:59:59Z"})});
+     const data=await resp.json();
+     if(!resp.ok)throw Error(data.detail||"No se pudo extraer el histórico de MT5.");
+     setDatasets(p=>[data,...p.filter(x=>x.id!==data.id)]);
+     change("dataset_id",data.id);
+     setNotice("Histórico MT5 importado: "+cfg.symbol+" · "+fCurrency(data.rows)+" barras M1. Ajusta los costes históricos y deslizamiento antes de evaluar resultados.");
+   }catch(e){setError(e instanceof Error?e.message:"Error al obtener histórico del terminal.")}
+   finally{setImportingMT5(false)}
+ }
+ useEffect(()=>{void refreshAccounts()},[]);
  function change<K extends keyof Config>(key:K,value:Config[K]){setCfg(p=>({...p,[key]:value}));setError("");if(["dataset_id","symbol","timeframe","timeframes","start_date","end_date","families","capital"].includes(String(key)))setProfile(null)}
- function open(v:View){setView(v);setMobile(false);setError("");setNotice("")}
+ function open(v:View){if(v!=="accounts"&&!activeAccountId){setError("Debes conectar una cuenta MT5 en Principal → Cuentas para utilizar el laboratorio.");setView("accounts");return}setView(v);setMobile(false);setError("");setNotice("")}
  function start(){open("sessions")}
  function createSession(name:string){
-   const symbol=DEFAULT.symbol;
-   const next:AlgoSession<Config>={id:crypto.randomUUID(),name,symbol,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:"draft",config:{...DEFAULT,name,symbol}};
+   const symbol=cfg.symbol||mt5Symbols[0]?.name||"";
+   const next:AlgoSession<Config>={id:crypto.randomUUID(),name,symbol,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:"draft",accountId:activeAccountId||undefined,config:{...DEFAULT,name,symbol}};
    setSessions(prev=>[next,...prev]);
  }
  function editSession(id:string){
@@ -372,24 +453,25 @@ export default function Page(){
  return <div className="shell">
  <aside className={`sidebar ${mobile?"sidebar-open":""}`}>
  <div className="sidebar-brand"><Brand/><button className="icon-only mobile-close" onClick={()=>setMobile(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
- <div className="workspace-selector"><div className="workspace-avatar">TQ</div><span><strong>Quant Research</strong><small>Entorno personal</small></span><span className="workspace-arrow">⌄</span></div>
- <div className="nav-scroller">{NAV.map(group=><div className="nav-section" key={group.section}><div className="nav-title">{group.section}</div>{group.items.map(item=><button key={item.label} disabled={!item.id} onClick={()=>item.id&&open(item.id)} className={`nav-item ${(view===item.id||(item.id==="sessions"&&view==="builder"))?"nav-active":""}`}><item.icon size={17}/><span>{item.label}</span>{item.sub?<span className="soon">PRONTO</span>:(view===item.id||(item.id==="sessions"&&view==="builder"))?<span className="active-bar"/>:null}</button>)}</div>)}</div>
+ <button className="workspace-selector" type="button" onClick={()=>open("accounts")}><div className="workspace-avatar">5</div><span><strong>{accounts.find(a=>a.id===activeAccountId)?.name||"Conectar MT5"}</strong><small>{activeAccountId?"Cuenta activa · Solo lectura":"Cuenta obligatoria"}</small></span><span className="workspace-arrow">⌄</span></button>
+ <div className="nav-scroller">{NAV.map(group=><div className="nav-section" key={group.section}><div className="nav-title">{group.section}</div>{group.items.map(item=><button key={item.label} disabled={!item.id||(!activeAccountId&&item.id!=="accounts")} onClick={()=>item.id&&open(item.id)} className={`nav-item ${(view===item.id||(item.id==="sessions"&&view==="builder"))?"nav-active":""}`}><item.icon size={17}/><span>{item.label}</span>{item.sub?<span className="soon">PRONTO</span>:(view===item.id||(item.id==="sessions"&&view==="builder"))?<span className="active-bar"/>:null}</button>)}</div>)}</div>
  <div className="sidebar-footer"><div className="sidebar-help"><div className="help-icon"><CircleHelp size={17}/></div><div><strong>Centro de investigación</strong><p>Documentación y arquitectura</p></div><a href="https://github.com/AnthonyHenriquezLuciano/TradingQuant" target="_blank" rel="noreferrer" aria-label="Abrir repositorio"><ArrowUpRight size={16}/></a></div><div className="profile"><div className="profile-avatar">TQ</div><div><strong>TradingQuant</strong><span>Workspace · V0.1</span></div><Settings2 size={16}/></div></div>
  </aside>
  {mobile&&<button className="mobile-overlay" aria-label="Cerrar menú" onClick={()=>setMobile(false)}/>}
  <div className="main-shell">
- <header className="topbar"><div className="topbar-left"><button className="icon-only mobile-menu" onClick={()=>setMobile(true)} aria-label="Abrir menú"><Menu size={21}/></button><span className="breadcrumb-root">TradingQuant</span><ChevronRight size={14}/><span className="breadcrumb-mid">Laboratorio</span><ChevronRight size={14}/><strong>{view==="home"?"Visión general":view==="builder"?"Configuración de sesión":view==="sessions"?"Creador de algoritmos":view==="datasets"?"Datos históricos":view==="validation"?"Validación científica":"Exploraciones"}</strong></div><div className="topbar-right"><span className="environment"><span/> RESEARCH MODE</span><a className="topbar-docs" target="_blank" rel="noreferrer" href="https://github.com/AnthonyHenriquezLuciano/TradingQuant"><BookOpen size={16}/><span>Documentación</span></a><div className="topbar-profile">TQ</div></div></header>
+ <header className="topbar"><div className="topbar-left"><button className="icon-only mobile-menu" onClick={()=>setMobile(true)} aria-label="Abrir menú"><Menu size={21}/></button><span className="breadcrumb-root">TradingQuant</span><ChevronRight size={14}/><span className="breadcrumb-mid">Laboratorio</span><ChevronRight size={14}/><strong>{view==="accounts"?"Cuentas":view==="home"?"Visión general":view==="builder"?"Configuración de sesión":view==="sessions"?"Creador de algoritmos":view==="datasets"?"Datos históricos":view==="validation"?"Validación científica":"Exploraciones"}</strong></div><div className="topbar-right"><span className="environment"><span/> RESEARCH MODE</span><a className="topbar-docs" target="_blank" rel="noreferrer" href="https://github.com/AnthonyHenriquezLuciano/TradingQuant"><BookOpen size={16}/><span>Documentación</span></a><div className="topbar-profile">TQ</div></div></header>
  <main className="content">
  {error&&<div className="alert alert-error" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={()=>setError("")} aria-label="Cerrar aviso"><X size={16}/></button></div>}
  {notice&&<div className="alert alert-success" role="status"><CheckCircle2 size={18}/><span>{notice}</span><button onClick={()=>setNotice("")} aria-label="Cerrar aviso"><X size={16}/></button></div>}
- {view==="home"&&<><div className="page-intro"><div><div className="eyebrow">TRADINGQUANT / LAB 01 <span className="eyebrow-line"/></div><h1>Construye evidencia.<br/><span>Encuentra tu ventaja.</span></h1><p>Un laboratorio de investigación cuantitativa para descubrir, probar y validar estrategias antes de arriesgar capital.</p><div className="intro-actions"><button className="btn btn-primary" onClick={start}><Plus size={17}/> Nueva exploración <ArrowRight size={16}/></button><button className="btn btn-ghost" onClick={()=>open("datasets")}><Database size={16}/> Importar datos</button></div></div><Badge kind="accent"><span className="pulse-dot"/> FASE 01 · BETA</Badge></div>
+ {view==="accounts"&&<AccountCenter accounts={accounts} activeId={activeAccountId} symbols={mt5Symbols} allSymbols={allMt5Symbols} busy={accountBusy} error={error} onConnect={connectAccount} onActivate={activateAccount} onRefresh={refreshAccounts} onRefreshSymbols={()=>activeAccountId?loadSymbols(activeAccountId):Promise.resolve()}/>}
+ {view==="home"&&activeAccountId&&<><div className="page-intro"><div><div className="eyebrow">TRADINGQUANT / LAB 01 <span className="eyebrow-line"/></div><h1>Construye evidencia.<br/><span>Encuentra tu ventaja.</span></h1><p>Un laboratorio de investigación cuantitativa para descubrir, probar y validar estrategias antes de arriesgar capital.</p><div className="intro-actions"><button className="btn btn-primary" onClick={start}><Plus size={17}/> Nueva exploración <ArrowRight size={16}/></button><button className="btn btn-ghost" onClick={()=>open("datasets")}><Database size={16}/> Importar datos</button></div></div><Badge kind="accent"><span className="pulse-dot"/> FASE 01 · BETA</Badge></div>
  <div className="metric-grid"><MetricBlock icon={FlaskConical} label="EXPLORACIONES" value={fCurrency(runs.length)} foot="Sesiones ejecutadas"/><MetricBlock icon={GitBranch} label="CANDIDATOS PROBADOS" value={fCurrency(count)} foot="Con datos históricos"/><MetricBlock icon={ShieldCheck} label="FILTRO PRELIMINAR" value={fCurrency(validated.length)} foot="No equivale a aprobación final"/><MetricBlock icon={Database} label="DATASETS" value={String(datasets.length).padStart(2,"0")} foot="Archivos cargados"/></div>
  <div className="hero-panel"><div className="hero-left"><div className="feature-label"><span className="feature-ping"/><span>RESEARCH ENGINE / V0.1</span></div><h2>De una hipótesis<br/>a una <em>estrategia medible.</em></h2><p>Explora combinaciones de señales, mide su desempeño fuera de muestra y somete los resultados a escenarios de riesgo. Menos intuición. Más proceso.</p><div className="hero-list"><span><CheckCircle2 size={15}/> Descubrimiento parametrizado</span><span><CheckCircle2 size={15}/> Split IS / OOS cronológico</span><span><CheckCircle2 size={15}/> Bootstrap Monte Carlo</span></div><button className="link-button" onClick={start}>Abrir creador de algoritmos <ArrowRight size={17}/></button></div><Illustration/></div>
  <div className="section-space"><SectionHeading eyebrow="TU ACTIVIDAD" title="Exploraciones recientes" description="Cada búsqueda conserva su configuración y resultados en este navegador." right={<button className="btn btn-outline btn-small" onClick={()=>open("results")}>Ver todas <ArrowRight size={15}/></button>}/>{runs.length===0?<Empty title="Tu primera exploración empieza aquí" description="Todavía no has ejecutado búsquedas. Importa un CSV OHLC y configura la primera hipótesis desde el creador." action={<button className="btn btn-primary btn-small" onClick={start}><Plus size={16}/> Crear exploración</button>}/>:<div className="run-list">{runs.slice(0,3).map(r=><button className="run-row" key={r.id} onClick={()=>{setSelected(r.id);open("results")}}><div className="run-glyph"><FlaskConical size={19}/></div><div className="run-detail"><strong>{r.config.name}</strong><small>{r.config.symbol} · {r.config.timeframe} · {formatDate(r.created_at)}</small></div><div className="run-count"><strong>{r.tested}</strong><span>evaluados</span></div><Badge kind={r.accepted>0?"good":"neutral"}>{r.accepted} filtrados</Badge><ChevronRight size={17}/></button>)}</div>}</div>
  <div className="section-space"><SectionHeading eyebrow="METODOLOGÍA" title="Un proceso que puedes auditar" description="La calidad de la estrategia depende del método de validación, no de una curva atractiva."/><div className="info-grid"><InfoCard icon={SlidersHorizontal} title="01. Genera" desc="Busca reglas interpretables y rangos de parámetros sobre un dataset seleccionado."/><InfoCard icon={Microscope} title="02. Contrasta" desc="Separa entrenamiento y prueba temporal para reducir el sesgo de selección."/><InfoCard icon={Shield} title="03. Protege" desc="Evalúa límites de pérdida y remuestreo antes de promover candidatos."/></div></div></>}
  {view==="sessions"&&<SessionOverview sessions={sessions} onCreate={createSession} onOpen={editSession} onDelete={deleteSession} onResults={id=>{const sess=sessions.find(t=>t.id===id);if(sess?.runId&&runs.some(t=>t.id===sess.runId)){setSelected(sess.runId);setSelectedCandidate(null);open("results")}else setError("Esta sesión todavía no tiene un resultado disponible en el navegador actual.")}}/>}
- {view==="builder"&&<StrategyConfigurator config={cfg} datasetList={datasets} loading={loading} onChange={change} onUpload={()=>open("datasets")} profile={profile} analyzing={analyzing} onAnalyze={analyzeHistorical} onExecute={explore} onBack={()=>open("sessions")}/>}
- {view==="datasets"&&<><div className="page-heading"><div><div className="eyebrow">INFRAESTRUCTURA / HISTORICAL DATA</div><h1>Datos históricos</h1><p>El fundamento del laboratorio es un conjunto de datos verificable y consistente.</p></div><button className="btn btn-primary" onClick={()=>fileRef.current?.click()} disabled={uploading}><Plus size={17}/> Subir CSV</button></div><div className="tq-api-settings"><div><strong><Database size={16}/> Motor científico local</strong><p>FastAPI, Polars, Numba, Monte Carlo y backtesting en tu PC. Sin Render ni servicios de terceros.</p></div><div className="tq-api-controls"><code>http://127.0.0.1:8000</code><button type="button" className="btn btn-outline btn-small" onClick={checkBackend} disabled={apiStatus==="checking"}>{apiStatus==="checking"?"Verificando…":"Verificar motor local"}</button><span className={"tq-api-pill "+apiStatus}>{apiStatus==="online"?"Conectado":apiStatus==="offline"?"Desconectado":apiStatus==="checking"?"Comprobando":"Sin verificar"}</span></div><small>La API escucha solo en 127.0.0.1. Los CSV y resultados se conservan en tu PC.</small></div><div className="tq-api-settings"><div><strong><FolderOpen size={16}/> Importación directa desde el disco</strong><p>Para históricos M1 grandes, coloca tus CSV de MT5 en <code>apps/api/data/inbox/</code> y pulsa «Buscar archivos». No requiere transferencias del navegador ni servicios externos.</p></div><div className="tq-api-controls"><button type="button" className="btn btn-outline btn-small" disabled={inboxLoading||uploading} onClick={refreshInbox}>{inboxLoading?"Buscando…":"Buscar archivos CSV locales"}</button><span className="tq-api-pill online">{localInbox.length} disponibles</span></div>{localInbox.length>0&&<div className="dataset-list">{localInbox.map(file=><div className="dataset-row" key={file.filename}><span className="dataset-icon"><FileSpreadsheet size={18}/></span><div><strong>{file.filename}</strong><small>{(file.size_bytes/(1024*1024)).toFixed(1)} MiB</small></div><button className="btn btn-outline btn-small" disabled={uploading} onClick={()=>importFromDisk(file.filename)}>Importar del disco</button></div>)}</div>}</div><input ref={fileRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>e.target.files?.[0]&&upload(e.target.files[0])}/><div className="upload-drop" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!uploading&&e.dataTransfer.files?.[0])upload(e.dataTransfer.files[0])}} onClick={()=>!uploading&&fileRef.current?.click()} role="button" tabIndex={0} onKeyDown={e=>(e.key==="Enter"||e.key===" ")&&fileRef.current?.click()}><div className="upload-drop-icon">{uploading?<LoaderCircle size={29} className="spin"/>:<UploadCloud size={29}/>}</div><h3>{uploading?(uploadProgress?.phase||"Importando CSV…"):"Arrastra tu investigación al laboratorio"}</h3><p>Haz clic para seleccionar un archivo CSV con velas OHLC.</p><button className="btn btn-outline" disabled={uploading} onClick={e=>{e.stopPropagation();fileRef.current?.click()}}><FileSpreadsheet size={16}/> Seleccionar archivo</button>{uploadProgress&&<div className="tq-upload-progress" role="progressbar" aria-valuenow={uploadProgress.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Progreso de importación CSV"><div><span>{uploadProgress.phase}</span><strong>{uploadProgress.percent}%</strong></div><div className="tq-r-track"><span style={{width:uploadProgress.percent+"%"}}/></div><small>{(uploadProgress.uploaded/(1024*1024)).toFixed(1)} / {(uploadProgress.total/(1024*1024)).toFixed(1)} MiB transferidos</small></div>}<small>CSV · hasta 150 MB · timestamp u columnas date + time · zona horaria conservada</small></div><div className="section-space"><SectionHeading eyebrow="LIBRERÍA" title="Mis datasets" description="Metadatos en navegador; archivos conservados en el almacenamiento local de la API." right={<Badge>{datasets.length} ARCHIVOS</Badge>}/>{datasets.length===0?<Empty icon={Database} title="No hay datasets importados" description="Sube datos OHLC de MetaTrader 5 para ejecutar tus primeras exploraciones."/>:<div className="dataset-list">{datasets.map(d=><div className="dataset-row" key={d.id}><span className="dataset-icon"><Database size={18}/></span><div><strong>{d.filename}</strong><small>{d.start} → {d.end}</small></div><span className="dataset-rows">{fCurrency(d.rows)} velas</span><Badge kind={cfg.dataset_id===d.id?"good":"neutral"}>{cfg.dataset_id===d.id?"SELECCIONADO":"CSV"}</Badge><button className="btn btn-outline btn-small" onClick={()=>{change("dataset_id",d.id);open("builder")}}>Usar <ArrowRight size={14}/></button></div>)}</div>}</div><div className="aside-note wide"><AlertTriangle size={17}/><p>Fuente horaria: se respeta la hora original del CSV; revisa horario del bróker y cambios DST. Los datos no se envían a un bróker ni se usan para ejecución real.</p></div></>}
+ {view==="builder"&&activeAccountId&&<StrategyConfigurator config={cfg} datasetList={datasets} availableSymbols={mt5Symbols} accountLabel={accounts.find(a=>a.id===activeAccountId)?.name||""} importingMT5={importingMT5} onImportMT5={importMT5History} loading={loading} onChange={change} onUpload={()=>open("datasets")} profile={profile} analyzing={analyzing} onAnalyze={analyzeHistorical} onExecute={explore} onBack={()=>open("sessions")}/>}
+ {view==="datasets"&&activeAccountId&&<><div className="page-heading"><div><div className="eyebrow">INFRAESTRUCTURA / HISTORICAL DATA</div><h1>Datos históricos</h1><p>El fundamento del laboratorio es un conjunto de datos verificable y consistente.</p></div><button className="btn btn-primary" onClick={()=>fileRef.current?.click()} disabled={uploading}><Plus size={17}/> Subir CSV</button></div><div className="tq-api-settings"><div><strong><Database size={16}/> Motor científico local</strong><p>FastAPI, Polars, Numba, Monte Carlo y backtesting en tu PC. Sin Render ni servicios de terceros.</p></div><div className="tq-api-controls"><code>http://127.0.0.1:8000</code><button type="button" className="btn btn-outline btn-small" onClick={checkBackend} disabled={apiStatus==="checking"}>{apiStatus==="checking"?"Verificando…":"Verificar motor local"}</button><span className={"tq-api-pill "+apiStatus}>{apiStatus==="online"?"Conectado":apiStatus==="offline"?"Desconectado":apiStatus==="checking"?"Comprobando":"Sin verificar"}</span></div><small>La API escucha solo en 127.0.0.1. Los CSV y resultados se conservan en tu PC.</small></div><div className="tq-api-settings"><div><strong><FolderOpen size={16}/> Importación directa desde el disco</strong><p>Para históricos M1 grandes, coloca tus CSV de MT5 en <code>apps/api/data/inbox/</code> y pulsa «Buscar archivos». No requiere transferencias del navegador ni servicios externos.</p></div><div className="tq-api-controls"><button type="button" className="btn btn-outline btn-small" disabled={inboxLoading||uploading} onClick={refreshInbox}>{inboxLoading?"Buscando…":"Buscar archivos CSV locales"}</button><span className="tq-api-pill online">{localInbox.length} disponibles</span></div>{localInbox.length>0&&<div className="dataset-list">{localInbox.map(file=><div className="dataset-row" key={file.filename}><span className="dataset-icon"><FileSpreadsheet size={18}/></span><div><strong>{file.filename}</strong><small>{(file.size_bytes/(1024*1024)).toFixed(1)} MiB</small></div><button className="btn btn-outline btn-small" disabled={uploading} onClick={()=>importFromDisk(file.filename)}>Importar del disco</button></div>)}</div>}</div><input ref={fileRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>e.target.files?.[0]&&upload(e.target.files[0])}/><div className="upload-drop" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!uploading&&e.dataTransfer.files?.[0])upload(e.dataTransfer.files[0])}} onClick={()=>!uploading&&fileRef.current?.click()} role="button" tabIndex={0} onKeyDown={e=>(e.key==="Enter"||e.key===" ")&&fileRef.current?.click()}><div className="upload-drop-icon">{uploading?<LoaderCircle size={29} className="spin"/>:<UploadCloud size={29}/>}</div><h3>{uploading?(uploadProgress?.phase||"Importando CSV…"):"Arrastra tu investigación al laboratorio"}</h3><p>Haz clic para seleccionar un archivo CSV con velas OHLC.</p><button className="btn btn-outline" disabled={uploading} onClick={e=>{e.stopPropagation();fileRef.current?.click()}}><FileSpreadsheet size={16}/> Seleccionar archivo</button>{uploadProgress&&<div className="tq-upload-progress" role="progressbar" aria-valuenow={uploadProgress.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Progreso de importación CSV"><div><span>{uploadProgress.phase}</span><strong>{uploadProgress.percent}%</strong></div><div className="tq-r-track"><span style={{width:uploadProgress.percent+"%"}}/></div><small>{(uploadProgress.uploaded/(1024*1024)).toFixed(1)} / {(uploadProgress.total/(1024*1024)).toFixed(1)} MiB transferidos</small></div>}<small>CSV · hasta 150 MB · timestamp u columnas date + time · zona horaria conservada</small></div><div className="section-space"><SectionHeading eyebrow="LIBRERÍA" title="Mis datasets" description="Metadatos en navegador; archivos conservados en el almacenamiento local de la API." right={<Badge>{datasets.length} ARCHIVOS</Badge>}/>{datasets.length===0?<Empty icon={Database} title="No hay datasets importados" description="Sube datos OHLC de MetaTrader 5 para ejecutar tus primeras exploraciones."/>:<div className="dataset-list">{datasets.map(d=><div className="dataset-row" key={d.id}><span className="dataset-icon"><Database size={18}/></span><div><strong>{d.filename}</strong><small>{d.start} → {d.end}</small></div><span className="dataset-rows">{fCurrency(d.rows)} velas</span><Badge kind={cfg.dataset_id===d.id?"good":"neutral"}>{cfg.dataset_id===d.id?"SELECCIONADO":"CSV"}</Badge><button className="btn btn-outline btn-small" onClick={()=>{change("dataset_id",d.id);open("builder")}}>Usar <ArrowRight size={14}/></button></div>)}</div>}</div><div className="aside-note wide"><AlertTriangle size={17}/><p>Fuente horaria: se respeta la hora original del CSV; revisa horario del bróker y cambios DST. Los datos no se envían a un bróker ni se usan para ejecución real.</p></div></>}
  {view==="running"&&<div className="tq-running"><div className="tq-r-eyebrow">MOTOR CIENTÍFICO / EJECUCIÓN REAL</div><h1>Exploración en progreso</h1><p>{cfg.name} · {cfg.symbol} · {cfg.timeframes.join(", ")}</p><div className="tq-running-progress"><div><strong>{jobStatus?.percent??0}%</strong><span>{jobStatus?.phase||"Preparando"}</span></div><div className="tq-r-track"><span style={{width:String(jobStatus?.percent??0)+"%"}}/></div></div><div className="tq-r-metrics"><div className="tq-r-metric"><span>Candidatos evaluados</span><strong>{jobStatus?.checked??0}</strong></div><div className="tq-r-metric"><span>Presupuesto del tramo</span><strong>{jobStatus?.total??cfg.candidates}</strong></div><div className="tq-r-metric"><span>Tiempo transcurrido</span><strong>{jobStatus?.elapsed_seconds??0}s</strong></div><div className="tq-r-metric"><span>Estado</span><strong>{jobStatus?.status||"En cola"}</strong></div></div><div className="tq-r-note"><Info size={16}/> El progreso proviene del worker Python. Las fases de Monte Carlo y validación se calculan después de explorar. Mantén este motor activo hasta terminar.</div></div>}
  {view==="results"&&currentRun&&<ResearchResults run={currentRun} onSelect={id=>{setSelectedCandidate(id);open("detail")}} onEdit={()=>{const s=sessions.find(t=>t.runId===currentRun.id);if(s)editSession(s.id);else open("builder")}}/>}
  {view==="detail"&&currentRun&&selectedCandidate&&(()=>{const cand=currentRun.candidates.find(t=>t.id===selectedCandidate);return cand?<StrategyDetail run={currentRun} candidate={cand} onBack={()=>open("results")}/>:null})()}
