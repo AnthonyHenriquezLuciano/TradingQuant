@@ -12,6 +12,10 @@ services:
     dockerContext: ./apps/api
     healthCheckPath: /health
     envVars:
+      - key: TRADINGQUANT_REQUIRE_AUTH
+        value: '1'
+      - key: TRADINGQUANT_ACCESS_TOKEN
+        generateValue: true
       - key: TRADINGQUANT_DATA_DIR
         value: /data/uploads
       - key: NUMBA_CACHE_DIR
