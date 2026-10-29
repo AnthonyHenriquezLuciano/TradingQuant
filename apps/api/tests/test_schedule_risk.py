@@ -129,3 +129,30 @@ def test_loss_streak_daily_stop():
 def test_risk_rules_validation():
     with pytest.raises(ValueError,match="Valor de riesgo"):
         normalize_risk_rules({"max_monthly_loss_pct":-3})
+
+
+def test_weekly_profit_limit_resets_on_new_week():
+    m=scenario()
+    m[0][41]=1
+    m[0][46]=1
+    m[2][42]=102.
+    m[2][47]=102.
+    m[7][44:]=2
+    m[8][44:]=2
+    m[6][44:]=2
+    gains=np.array([0,.1,0,0],dtype=np.float64)
+    losses=np.zeros(4,dtype=np.float64)
+    result,_=evaluate(m,max_gains=gains,max_losses=losses)
+    assert len(result)==2
+
+
+def test_monthly_loss_limit_prevents_later_entries():
+    m=scenario()
+    m[0][41]=1
+    m[0][46]=1
+    m[3][42]=98.
+    m[3][47]=98.
+    gains=np.zeros(4,dtype=np.float64)
+    losses=np.array([0,0,.1,0],dtype=np.float64)
+    result,_=evaluate(m,max_gains=gains,max_losses=losses)
+    assert len(result)==1
