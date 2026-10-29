@@ -297,7 +297,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     current_cost_bps=float(cfg["cost_bps"])
 
     def simulate_configured(signals,op,hi,lo,close,atr,days,begin,end,side,pair,
-                            entry_variant,allow_entry,forced_exit,weeks,months):
+                            entry_variant,allow_entry,forced_exit,weeks,months,cost_reference):
         shared=(signals,op,hi,lo,close,atr,days,begin,end,
                 exit_code,pair[0],pair[1],estimated_roundtrip_bps(costs_cfg,cfg["symbol"],cost_reference,side,cfg["cost_bps"]),side,sampling_model,
                 cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
@@ -354,7 +354,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 return None
             r_is,d_is = simulate_configured(
                 signals,op,hi,lo,close,atr,days,0,cut,side,pair,
-                entry_variant,allow_entry,forced_exit,weeks,months,
+                entry_variant,allow_entry,forced_exit,weeks,months,cost_reference,
             )
             metrics_is = summarize(
                 r_is,d_is,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -369,6 +369,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 score = -1e8 + metrics_is["trades"]
             return dict(
                 gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),signals=signals,in_sample=metrics_is,
+                reference_cost_price=cost_reference,
                 trades_is=r_is,days_is=d_is,estimated_cost_bps=is_prices_cost[side],
                 optimization_metrics=optimization_metrics,
                 dataframe=(op,hi,lo,close,atr,days,cut,n,allow_entry,forced_exit,weeks,months),
@@ -440,7 +441,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         pair=trial["exit_pair"]
         r_oos,d_oos = simulate_configured(
             trial["signals"],op,hi,lo,cl,atr,days,cut,n,trial["side"],pair,
-            trial["entry_variant"],allow_entry,forced_exit,weeks,months,
+            trial["entry_variant"],allow_entry,forced_exit,weeks,months,trial["reference_cost_price"],
         )
         metrics_oos = summarize(
             r_oos,d_oos,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
