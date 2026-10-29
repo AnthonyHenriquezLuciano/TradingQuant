@@ -79,7 +79,7 @@ export function AdvancedConfig({value,onChange,currentCapitalBE,currentCapitalTr
     </select></label>
     <NumberField label="Multiplicador" value={v.risk_multiplier} min={1} max={3} step={.1} onChange={x=>set({risk_multiplier:x})}/>
     <NumberField label="Máximo de niveles" value={v.risk_max_levels} min={1} max={10} step={1} onChange={x=>set({risk_max_levels:x})}/>
-    <label className="tq-adv-field tq-adv-inline"><span>Reiniciar al ganar</span><Switch checked={v.risk_reset_on_win} onChange={x=>set({risk_reset_on_win:x})}/></label>
+    {v.variable_risk_mode==="martingale"&&<label className="tq-adv-field tq-adv-inline"><span>Reiniciar al ganar</span><Switch checked={v.risk_reset_on_win} onChange={x=>set({risk_reset_on_win:x})}/></label>}
    </div>
    <div className="tq-adv-notice"><TriangleAlert size={15}/> La martingala incrementa rápidamente el riesgo. El motor limita el riesgo acumulado a 2% del capital de referencia por operación compuesta.</div>
   </Block>
@@ -117,7 +117,7 @@ export function AdvancedConfig({value,onChange,currentCapitalBE,currentCapitalTr
       <NumberField label="Espaciado" min={.1} max={10} value={v.pyramid_spacing} onChange={x=>set({pyramid_spacing:x})}/>
      </div>}
     </div>
-    <label className="tq-adv-subtoggle"><Switch checked={v.sl_tp_from_average} onChange={x=>set({sl_tp_from_average:x})}/><strong>TP desde precio promedio ponderado</strong></label>
+    <label className="tq-adv-subtoggle"><Switch checked={v.sl_tp_from_average} onChange={x=>set({sl_tp_from_average:x})}/><strong>SL/TP desde el promedio (sin ampliar riesgo)</strong></label>
     <p>El stop nunca se aleja del nivel inicial para aumentar exposición. El TP puede recalcularse desde el promedio, conservando el SL y la distancia original de riesgo del conjunto.</p>
    </div>
    <div className="tq-adv-notice"><ShieldCheck size={15}/> Se reserva capacidad para todas las patas al abrir el trade. No se permite aumentar la pérdida máxima planificada por encima del presupuesto total de riesgo de la operación.</div>
