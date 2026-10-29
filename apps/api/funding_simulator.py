@@ -60,7 +60,7 @@ def validate_funding(value: dict | None) -> dict:
         raise ValueError("Modelo de drawdown o consistencia desconocido.")
     if not isinstance(cfg["trailing_lock_initial"],bool):
         raise ValueError("Bloqueo del trailing inválido.")
-    for key,lo,hi in (("daily_loss_pct",.1,50),("total_loss_pct",.1,50),
+    for key,lo,hi in (("daily_loss_pct",0,50),("total_loss_pct",.1,50),
                       ("consistency_max_pct",1,100),("min_pass_rate_pct",0,100),
                       ("max_pass_days_percentile",0,2190),("simulations",32,2000),
                       ("bootstrap_block_days",1,20)):
@@ -108,11 +108,11 @@ def _run_phase(
                      else peak_eod-cfg["total_loss_pct"]/100.)
         if cfg["total_loss_mode"]=="trailing_eod" and cfg["trailing_lock_initial"]:
             total_floor=min(total_floor,1.)
-        if equity<=daily_floor+1e-12 or equity<=total_floor+1e-12:
+        if (cfg["daily_loss_pct"]>0 and equity<=daily_floor+1e-12) or equity<=total_floor+1e-12:
             return "breached",day
         profit=equity-before
         best_day_profit=max(best_day_profit,profit)
-        if traded and (cfg["phases"] is not None):
+        if traded:
             min_gain=phase["min_profit_day_pct"]/100.
             if phase["min_profit_day_pct"]==0 or profit>=min_gain-1e-12:
                 profitable_days+=1
