@@ -5,7 +5,7 @@ import {
  Activity, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, CheckCircle2,
  ChevronLeft, ChevronRight, CircleHelp, Clock3, CloudUpload, Database,
  FlaskConical, FolderOpen, GitBranch, LayoutDashboard, Layers3, Menu,
- Microscope, Play, Plus, SearchCheck, Settings2, Shield, ShieldCheck,
+ Microscope, Play, Plus, SearchCheck, Settings2, Shield, ShieldCheck, Info,
  SlidersHorizontal, Sparkles, Target, TerminalSquare, TrendingUp, UploadCloud,
  WandSparkles, X, Zap, AlertTriangle, LoaderCircle, ExternalLink, FileSpreadsheet
 } from "lucide-react";
