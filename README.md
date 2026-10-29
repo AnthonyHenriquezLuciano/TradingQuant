@@ -2,9 +2,11 @@
 
 Laboratorio de investigación cuantitativa y creador de algoritmos con enfoque en validación fuera de muestra y cuentas de fondeo.
 
-## Modo local Windows — sin limites del hosting Render
+## Modo local Windows — MT5 obligatorio, sin servidores externos
 
 Si quieres usar tu CPU, RAM y disco para backtesting, descarga el repositorio y ejecuta **INICIAR_TRADINGQUANT_LOCAL.bat**. Instala las dependencias iniciales, abre FastAPI y Next.js en tu PC y mantiene los CSV en tu equipo. La pagina local es **http://127.0.0.1:3000**, con backend **http://127.0.0.1:8000**; no requiere token en loopback. El limite de subida local es de 1024 MiB (ajustable), pero el consumo de RAM del backtest depende del tamaño real de los datos y validaciones.
+
+**Novedades:** Principal → Cuentas, conexión local y obligatoria al terminal MT5 ya autenticado, símbolos de la cuenta y otras cuentas guardadas, velas M1 descargadas directamente desde MT5, y especificaciones de costes reales (spread, tick, contrato y swaps actuales; comisión y slippage no garantizados). El catálogo tiene 59 familias OHLC ejecutables; las entradas sin datos verificables siguen deshabilitadas. Para utilizar MT5, inicia sesión en el terminal de Windows y abre el archivo BAT. No se piden contraseñas.
 
 **Guia completa:** [MODO_LOCAL_WINDOWS.md](./MODO_LOCAL_WINDOWS.md). La version local es independiente de Render/Vercel; tus sesiones no se sincronizan automaticamente.
 
