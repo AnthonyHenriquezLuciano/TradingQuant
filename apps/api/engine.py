@@ -23,14 +23,26 @@ def load_data(path: Path) -> pl.DataFrame:
     with path.open("rb") as handle:
         first = handle.readline().decode("utf-8-sig", errors="replace")
     delimiter = "\t" if first.count("\t") > first.count(",") else ";" if first.count(";") > first.count(",") else ","
+    # CSV M1 multi-year files may have millions of rows. Read only the OHLC
+    # and timestamp columns; <TICKVOL>, <VOL>, <SPREAD> stay in the original
+    # CSV but must not consume Polars memory during candle calculations.
+    import csv
+    header=next(csv.reader([first],delimiter=delimiter))
+    normalized={col:col.lstrip("\\ufeff").strip().strip("<>").lower().replace(" ","_") for col in header}
+    required=["open","high","low","close"]
+    for key in ("timestamp","datetime","date","time"):
+        if key in normalized.values():
+            required.append(key)
+    selected=[original for original,clean in normalized.items() if clean in required]
     try:
-        df = pl.read_csv(path, separator=delimiter, encoding="utf8-lossy", infer_schema_length=10000)
+        df = pl.read_csv(path, separator=delimiter, encoding="utf8-lossy",
+                         columns=selected, infer_schema_length=1000, low_memory=True)
     except Exception as exc:
         raise ValueError(f"No se pudo leer el CSV: {exc}") from exc
     # MetaTrader 5 exports use tab-separated <DATE>, <TIME>, <OPEN>, ...,
     # <TICKVOL>, <VOL>, <SPREAD>.  Only price columns are required for the
     # current OHLC engine; the original CSV is retained on disk unchanged.
-    renames = {col: col.lstrip("\\ufeff").strip().strip("<>").lower().replace(" ", "_") for col in df.columns}
+    renames = {col: col.lstrip("\ufeff").strip().strip("<>").lower().replace(" ", "_") for col in df.columns}
     if len(set(renames.values())) != len(df.columns):
         raise ValueError("El CSV contiene encabezados duplicados.")
     df = df.rename(renames)
