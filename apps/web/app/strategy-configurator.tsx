@@ -61,7 +61,7 @@ export const OPTIMIZATION_OPTIONS:{id:OptimizationObjective;name:string;descript
  {id:"expectancy",name:"Mayor Expectancy",description:"Maximiza la ganancia media en USD por operación cerrada."},
  {id:"win_rate",name:"Mayor Win Rate",description:"Maximiza el porcentaje de operaciones ganadoras, independientemente del tamaño de la ganancia."},
  {id:"recovery_factor",name:"Mayor Recovery Factor",description:"Maximiza el PnL neto dividido por el drawdown máximo absoluto de capital."},
- {id:"funding_pass_rate",name:"Mayor Pass Rate de Fondeo",description:"Maximiza la tasa estimada de aprobación de dos fases (8% y 5%) mediante 128 remuestreos de jornadas IS y límites realizados configurados. Proxy estadístico, no una garantía ni prueba de equity flotante."}
+ {id:"funding_pass_rate",name:"Mayor Pass Rate de Fondeo",description:"Maximiza la tasa estimada de aprobación de las fases de Fondeo configuradas, favoreciendo también un menor percentil de días hasta aprobar. Aplica los mínimos de aprobación y plazo indicados; es un proxy de balance realizado, no una garantía ni una prueba de equity flotante."}
 ];
 
 type Dataset={id:string;filename:string;rows:number;start:string;end:string;timeframe:string;uploaded_at:string};
