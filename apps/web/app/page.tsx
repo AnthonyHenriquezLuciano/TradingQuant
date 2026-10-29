@@ -131,7 +131,7 @@ export default function Page(){
  }
  async function upload(file:File){setUploading(true);setError("");setNotice("");try{if(!/\.csv$/i.test(file.name))throw Error("Selecciona un archivo .csv con datos OHLC.");if(file.size>150*1024*1024)throw Error("Máximo 150 MB por archivo en esta fase.");const form=new FormData();form.append("file",file);const resp=await fetch(`${API}/api/datasets/upload`,{method:"POST",body:form});const data=await resp.json();if(!resp.ok)throw Error(data.detail||"No se pudo procesar el CSV.");setDatasets(p=>[data,...p.filter(x=>x.id!==data.id)]);change("dataset_id",data.id);setNotice(`Archivo ${data.filename} importado: ${fCurrency(data.rows)} velas válidas.`)}catch(e){setError(e instanceof Error?e.message:"Error de red. ¿Está iniciada la API FastAPI?")}finally{setUploading(false);if(fileRef.current)fileRef.current.value=""}}
  function saveBackend(){
-  const address=backendDraft.trim().replace(/\\/+$/,"");
+  const address=backendDraft.trim().replace(/\/+$/,"");
   if(!address){localStorage.removeItem("tq_api_url");setApiUrl(DEFAULT_API);setBackendDraft(DEFAULT_API);setApiStatus("unknown");return}
   try{
    const url=new URL(address);
