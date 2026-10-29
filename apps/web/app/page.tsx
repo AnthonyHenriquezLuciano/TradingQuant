@@ -218,7 +218,7 @@ export default function Page(){
  async function refreshInbox(){
    setInboxLoading(true);setError("");
    try{
-    const r=await fetch(API+"/api/local/inbox",{cache:"no-store"});
+    const r=await fetch(API+"/api/local/inbox",{cache:"no-store",headers:authHeaders});
     const d=await r.json();
     if(!r.ok)throw Error(d.detail||"No se pudo explorar la carpeta local.");
     setLocalInbox(Array.isArray(d.files)?d.files:[]);
@@ -230,7 +230,7 @@ export default function Page(){
    setUploadProgress({percent:0,phase:"Registrando CSV del disco local",uploaded:0,total:1});
    try{
      const r=await fetch(API+"/api/local/import",{
-       method:"POST",headers:{"Content-Type":"application/json"},
+       method:"POST",headers:{"Content-Type":"application/json",...authHeaders},
        body:JSON.stringify({filename})
      });
      const d=await r.json();
@@ -239,7 +239,7 @@ export default function Page(){
      let result:Dataset|null=null;
      for(let attempt=0;attempt<900;attempt++){
        await new Promise(resolve=>setTimeout(resolve,1200));
-       const status=await fetch(API+"/api/datasets/uploads/"+encodeURIComponent(id),{cache:"no-store"});
+       const status=await fetch(API+"/api/datasets/uploads/"+encodeURIComponent(id),{cache:"no-store",headers:authHeaders});
        if(!status.ok)throw Error("El proceso local se reinició durante la validación.");
        const job=await status.json();
        if(job.status==="failed")throw Error(job.error||"La validación del CSV falló.");
@@ -432,7 +432,7 @@ export default function Page(){
        if(!resultResponse.ok)throw Error("No se pudo recuperar la exploración terminada.");
        const result=await resultResponse.json();
        if(!alive)return;
-       setRuns(old=>[result,...old.filter(t=>t.id!==result.id)]);
+       setRuns(old=>[{...result,accountId:activeAccountId},...old.filter(t=>t.id!==result.id)]);
        if(sessionId)setSessions(old=>old.map(t=>t.id===sessionId?{...t,status:"results",runId:result.id,found:result.candidates.length}:t));
        setSelected(result.id);setView("results");setLoading(false);
        localStorage.removeItem("tq_active_job");
