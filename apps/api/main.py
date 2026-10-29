@@ -18,6 +18,8 @@ from optimization_objectives import OBJECTIVES
 from funding_simulator import validate_funding
 from advanced_modifiers import validate_advanced
 from research_validation import validate_quality,validate_walkforward,validate_multiverse,validate_costs
+from execution_jobs import JOBS
+from preflight import preflight
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -206,3 +208,49 @@ def explore(config: ExplorationRequest):
         }
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+def dataset_path(dataset_id:str)->Path:
+    try:
+        file_id=uuid.UUID(dataset_id)
+    except (ValueError,TypeError,AttributeError):
+        raise HTTPException(400,"Dataset id inválido.") from None
+    path=DATA_DIR/f"{file_id}.csv"
+    if not path.is_file():
+        raise HTTPException(404,"Dataset no encontrado en la API. Reimporta el archivo CSV.")
+    return path
+
+@app.post("/api/explorations/preflight")
+def preflight_exploration(config:ExplorationRequest):
+    path=dataset_path(config.dataset_id)
+    try:
+        frame=load_data(path)
+        return preflight(frame,config.model_dump())
+    except ValueError as exc:
+        raise HTTPException(422,str(exc)) from exc
+
+@app.post("/api/explorations/start",status_code=202)
+def start_exploration(config:ExplorationRequest):
+    path=dataset_path(config.dataset_id)
+    try:
+        return JOBS.launch(path,config.model_dump(),load_data,run_advanced)
+    except ValueError as exc:
+        raise HTTPException(429,str(exc)) from exc
+
+@app.get("/api/explorations/jobs/{job_id}")
+def job_status(job_id:str):
+    job=JOBS.status(job_id)
+    if job is None:
+        raise HTTPException(404,"Exploración no encontrada en este proceso de API.")
+    return job
+
+@app.get("/api/explorations/jobs/{job_id}/result")
+def job_result(job_id:str):
+    state=JOBS.status(job_id)
+    if state is None:
+        raise HTTPException(404,"Exploración no encontrada en este proceso de API.")
+    if state["status"]=="failed":
+        raise HTTPException(422,state.get("error") or "La exploración falló.")
+    if state["status"]!="completed":
+        raise HTTPException(409,"La exploración sigue en proceso.")
+    return JOBS.result(job_id)
