@@ -24,6 +24,7 @@ type Props<TConfig> = {
   sessions: AlgoSession<TConfig>[];
   onCreate: (name: string) => void;
   onOpen: (sessionId: string) => void;
+  onResults: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
 };
 
@@ -34,7 +35,7 @@ const format = (d: string) => {
     : dt.toLocaleDateString("es-DO", {day:"2-digit",month:"short",year:"numeric"});
 };
 
-export function SessionOverview<TConfig>({sessions,onCreate,onOpen,onDelete}: Props<TConfig>) {
+export function SessionOverview<TConfig>({sessions,onCreate,onOpen,onResults,onDelete}: Props<TConfig>) {
   const [layout,setLayout] = useState<"grid"|"list">("grid");
   const [search,setSearch] = useState("");
   const [menu,setMenu] = useState<string | null>(null);
@@ -134,7 +135,7 @@ export function SessionOverview<TConfig>({sessions,onCreate,onOpen,onDelete}: Pr
               <div ref={menu===session.id?menuRef:undefined} className="session-menu-wrap">
                 <button className="session-more" title="Acciones de la sesión" aria-label={"Opciones de "+session.name} aria-haspopup="menu" aria-expanded={menu===session.id} onClick={()=>setMenu(v=>v===session.id?null:session.id)}><Ellipsis size={20}/></button>
                 {menu===session.id&&<div className="session-dropdown" role="menu">
-                  <button role="menuitem" disabled aria-disabled="true" title="Próximamente"><TrendingUp size={16}/><span>Ver resultados<small>Próximamente</small></span></button>
+                  <button role="menuitem" disabled={!hasResults} onClick={()=>{onResults(session.id);setMenu(null)}}><TrendingUp size={16}/><span>Ver resultados<small>{hasResults?"Abrir ranking":"Sin ejecución"}</small></span></button>
                   <div className="session-menu-separator"/>
                   <button role="menuitem" className="session-delete-option" onClick={()=>{setDeleting(session.id);setMenu(null)}}><Trash2 size={16}/> Eliminar sesión</button>
                 </div>}
@@ -147,7 +148,7 @@ export function SessionOverview<TConfig>({sessions,onCreate,onOpen,onDelete}: Pr
             </div>
             <div className="session-tile-footer">
               <span><Clock3 size={13}/> Creada el {format(session.createdAt)}</span>
-              <button onClick={()=>onOpen(session.id)}>{isRunning?"Revisar configuración":hasResults?"Abrir sesión":"Configurar sesión"} <ChevronRight size={17}/></button>
+              <button onClick={()=>hasResults?onResults(session.id):onOpen(session.id)}>{isRunning?"Revisar configuración":hasResults?"Ver resultados":"Configurar sesión"} <ChevronRight size={17}/></button>
             </div>
           </article>;
         })}
