@@ -860,3 +860,8 @@ html,body{background:#090909;color:#f1eee8}
 .tq-risk-rules .tq-capital-muted{display:flex;align-items:flex-start;gap:7px}
 .tq-risk-rules .tq-capital-muted svg{flex-shrink:0;margin-top:3px;color:#be9e69}
 @media(max-width:680px){.tq-hours{padding:15px 12px}.tq-hours-header{flex-direction:column}.tq-hours-zone{margin-top:3px}.tq-hours-pills{gap:6px}.tq-hours-pills button{font-size:9px;padding:5px 10px}.tq-timeline{overflow-x:auto}.tq-timeline-hours,.tq-timeline-foot{margin-left:81px;min-width:470px}.tq-timeline-row{grid-template-columns:74px minmax(470px,1fr)}.tq-timeline-name{font-size:9px}.tq-hours-rule{padding:11px 10px}.tq-risk-rule-selected-row{grid-template-columns:minmax(0,1fr) 80px 20px;padding:10px 9px;gap:7px}.tq-risk-rule-chips button{font-size:9px}}
+
+.tq-hours-timezone{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:16px;font-size:11px;font-weight:700;color:#b9a891}
+.tq-hours-timezone select{height:37px;min-width:220px;max-width:100%;border:1px solid #695234;background:#15120e;color:#ead5b0;padding:0 12px;border-radius:7px;outline:none;color-scheme:dark}
+.tq-hours-timezone select:focus{border-color:#c9ab73}
+@media(max-width:600px){.tq-hours-timezone{align-items:stretch;flex-direction:column;gap:8px}.tq-hours-timezone select{width:100%;min-width:0}}
