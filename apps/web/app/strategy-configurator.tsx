@@ -38,13 +38,31 @@ export const DEFAULT_INDICATOR_RANGES:IndicatorRanges={
 };
 export type AlgoConfig = {
  name:string;dataset_id:string;symbol:string;timeframe:string;timeframes:string[];
- start_date:string;end_date:string;initial_deposit:number;mode:"random"|"genetic";
+ start_date:string;end_date:string;initial_deposit:number;mode:"random"|"genetic";optimization_objective:OptimizationObjective;
  modeling:"open"|"ohlc"|"m1"|"ticks";sizing:"compound"|"fixed";
  multi_tf:"individual"|"combined"|"both";generations:number;candidates:number;
  families:string[];indicator_ranges:IndicatorRanges;source_timezone:string;macro_indicators:string[];macro_rules:Record<string,MacroRule>;capital:CapitalSettings;schedule:ScheduleSettings;direction:"long"|"short"|"both";risk_pct:number;rr:number;
  atr_multiplier:number;cost_bps:number;is_ratio:number;min_trades:number;
  mc_iterations:number;prop_daily_pct:number;prop_max_pct:number;
 };
+
+export type OptimizationObjective =
+ |"balanced"|"sharpe"|"sortino"|"calmar"|"net_profit"|"min_drawdown"
+ |"profit_factor"|"expectancy"|"win_rate"|"recovery_factor"|"funding_pass_rate";
+export const OPTIMIZATION_OPTIONS:{id:OptimizationObjective;name:string;description:string}[]=[
+ {id:"balanced",name:"Score Balanceado",description:"Combina Sharpe × 2, penaliza drawdown superior al 30% y bonifica Profit Factor mayor de 1.5. El modo histórico de la plataforma."},
+ {id:"sharpe",name:"Mayor Sharpe Ratio",description:"Maximiza el retorno ajustado por volatilidad anualizado con la convención de 252 días de trading."},
+ {id:"sortino",name:"Mayor Sortino Ratio",description:"Similar al Sharpe, pero penaliza solamente la volatilidad negativa de los retornos."},
+ {id:"calmar",name:"Mayor Calmar",description:"Retorno anualizado dividido por el drawdown máximo. Favorece la consistencia y la recuperación."},
+ {id:"net_profit",name:"Mayor PnL Absoluto",description:"Maximiza la ganancia total en dólares estadounidenses (USD), útil para estudiar estrategias agresivas."},
+ {id:"min_drawdown",name:"Menor Drawdown",description:"Minimiza el peor descenso de la curva de balance realizado. Útil para evaluar estrategias de fondeo."},
+ {id:"profit_factor",name:"Mayor Profit Factor",description:"Maximiza la ganancia bruta dividida entre la pérdida bruta. Favorece estrategias con ratios positivos."},
+ {id:"expectancy",name:"Mayor Expectancy",description:"Maximiza la ganancia media en USD por operación cerrada."},
+ {id:"win_rate",name:"Mayor Win Rate",description:"Maximiza el porcentaje de operaciones ganadoras, independientemente del tamaño de la ganancia."},
+ {id:"recovery_factor",name:"Mayor Recovery Factor",description:"Maximiza el PnL neto dividido por el drawdown máximo absoluto de capital."},
+ {id:"funding_pass_rate",name:"Mayor Pass Rate de Fondeo",description:"Maximiza la tasa estimada de aprobación de dos fases (8% y 5%) mediante 128 remuestreos de jornadas IS y límites realizados configurados. Proxy estadístico, no una garantía ni prueba de equity flotante."}
+];
+
 type Dataset={id:string;filename:string;rows:number;start:string;end:string;timeframe:string;uploaded_at:string};
 type Props={
  config:AlgoConfig;datasetList:Dataset[];loading:boolean;
@@ -59,7 +77,7 @@ const HELP:Record<string,string>={
  timeframe:"Puedes elegir varios intervalos. Individual prueba cada uno; combinado utiliza el menor para las entradas y el mayor para el contexto.",
  period:"El periodo es inclusivo. Las fechas vacías utilizan todo el histórico disponible.",
  deposit:"El depósito inicial determina el capital base del backtest y el sizing; no conecta una cuenta real.",
- type:"Exploración aleatoria: muestrea indicadores y parámetros al azar, realiza backtesting y filtra los resultados sobre entrenamiento. Evolución genética: evoluciona una población con crossover, mutación y selección mediante Sharpe de entrenamiento.",
+ type:"Exploración aleatoria: genera candidatos al azar y los clasifica por el objetivo elegido. Evolución genética: realiza mutación, crossover y selección por el objetivo elegido usando únicamente entrenamiento.",
  modeling:"Solo apertura: evalúa a cada apertura, sin conocer extremos intrabar. OHLC: evalúa apertura/máximo/mínimo/cierre y prioriza SL cuando SL/TP coinciden. M1 y ticks reales requieren datos de mayor resolución y están pendientes de integración.",
  direction:"Solo Long busca compras; Solo Short busca ventas; Long + Short explora ambos sentidos, ampliando el espacio de búsqueda.",
  sizing:"Compuesto arriesga un porcentaje del saldo actual; fijo calcula siempre el riesgo a partir del depósito inicial.",
@@ -149,6 +167,25 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
     <Row id="deposit" label="Depósito inicial" active={help} toggle={setHelp}><div className="tq-one-deposit"><select id="tq-deposit" aria-label="Depósito inicial" value={!customDeposit&&DEPOSITS.includes(c.initial_deposit)?String(c.initial_deposit):"custom"} onChange={e=>{if(e.target.value==="custom"){setCustomDeposit(true)}else{setCustomDeposit(false);update("initial_deposit",Number(e.target.value))}}}>{DEPOSITS.map(n=><option value={String(n)} key={n}>{new Intl.NumberFormat("en-US").format(n)}</option>)}<option value="custom">Otro importe...</option></select>{(customDeposit||!DEPOSITS.includes(c.initial_deposit))&&<input type="number" aria-label="Importe personalizado" min={100} max={100000000} step={100} value={c.initial_deposit} onChange={e=>update("initial_deposit",Math.max(100,Math.min(100000000,Number(e.target.value)||100)))}/>}<span>USD</span></div></Row>
     <div className="tq-one-hairline"/>
     <Row id="type" label="Tipo" active={help} toggle={setHelp}><select id="tq-type" value={c.mode} onChange={e=>update("mode",e.target.value as AlgoConfig["mode"])}><option value="random">Exploración aleatoria</option><option value="genetic">Evolución genética</option></select></Row>
+    <div className="tq-one-row tq-optimization-row">
+      <div className="tq-one-label"><label htmlFor="tq-optimization-objective">Optimizar por:</label></div>
+      <div className="tq-one-value">
+       <div className="tq-optimization-select">
+        <select id="tq-optimization-objective" value={c.optimization_objective||"balanced"}
+         onChange={e=>{update("optimization_objective",e.target.value as OptimizationObjective);setHelp(null)}}>
+         {OPTIMIZATION_OPTIONS.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+        <button type="button" className="tq-hint-icon" aria-label="Información sobre el objetivo de optimización"
+         aria-expanded={help==="optimization"} aria-controls="tq-optimization-description"
+         title="¿Cómo se calcula?" onClick={()=>setHelp(help==="optimization"?null:"optimization")}><CircleHelp size={16}/></button>
+       </div>
+       {help==="optimization"&&<div id="tq-optimization-description" className="tq-optimization-explanation" role="note">
+        <span>OBJETIVO SELECCIONADO</span>
+        <p>{OPTIMIZATION_OPTIONS.find(o=>o.id===(c.optimization_objective||"balanced"))?.description}</p>
+        <small>La selección y el orden usan el conjunto de entrenamiento (IS); los resultados fuera de muestra (OOS) no intervienen en el ranking.</small>
+       </div>}
+      </div>
+    </div>
     {c.mode==="genetic"&&<div className="tq-one-subrow"><span>Generaciones</span><input aria-label="Número de generaciones" type="number" min={2} max={30} value={c.generations} onChange={e=>update("generations",Math.max(2,Math.min(30,Number(e.target.value)||2)))}/><small>Población y generaciones dentro del límite de combinaciones.</small></div>}
     <Row id="modeling" label="Modelado" active={help} toggle={setHelp}><select id="tq-modeling" value={c.modeling==="m1"||c.modeling==="ticks"?"ohlc":c.modeling} onChange={e=>update("modeling",e.target.value as AlgoConfig["modeling"])}><option value="open">Solo precios de apertura</option><option value="ohlc">OHLC del timeframe (SL primero)</option><option value="m1" disabled>OHLC en M1 · Próximamente</option><option value="ticks" disabled>Cada tick (datos reales) · Próximamente</option></select></Row>
     <Row id="direction" label="Dirección" active={help} toggle={setHelp}><select id="tq-direction" value={c.direction} onChange={e=>update("direction",e.target.value as AlgoConfig["direction"])}><option value="long">Solo Long</option><option value="short">Solo Short</option><option value="both">Long + Short</option></select></Row>
