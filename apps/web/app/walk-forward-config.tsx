@@ -2,7 +2,7 @@
 import {useState} from "react";
 import {CalendarClock,ChevronDown,Info,Shuffle} from "lucide-react";
 export type WalkForwardSettings={
- enabled:boolean;test_fraction:1|2|3|4|6;mode:"pure"|"reopt";
+ enabled:boolean;test_fraction:2|3|4|6|8|12;mode:"pure"|"reopt";
  top_n:number;min_efficiency:number;min_pass_rate_pct:number;min_oos_sharpe:number;
  rolling_windows:number;min_training_bars:number
 };
