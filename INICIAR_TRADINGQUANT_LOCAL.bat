@@ -33,6 +33,16 @@ if not exist "apps\api\.venv\.tradingquant-deps-ready" (
  if errorlevel 1 goto failed
  echo ready>"apps\api\.venv\.tradingquant-deps-ready"
 )
+echo [MT5] Verificando conexion Python con MetaTrader 5...
+"apps\api\.venv\Scripts\python.exe" -c "import MetaTrader5" >nul 2>nul
+if errorlevel 1 (
+ echo Instalando integracion oficial MetaTrader5 para Windows...
+ "apps\api\.venv\Scripts\python.exe" -m pip install --disable-pip-version-check MetaTrader5
+ if errorlevel 1 (
+   echo ERROR: No se pudo instalar MetaTrader5. Verifica Windows 64 bits y Python 3.12.
+   goto failed
+ )
+)
 if not exist "apps\web\node_modules\next" (
  echo [3/4] Instalando dependencias del frontend...
  pushd "apps\web"
