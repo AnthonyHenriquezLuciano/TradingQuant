@@ -34,6 +34,11 @@ TERMINAL_ALLOWED = "TRADINGQUANT_MT5_READ_ONLY"
 class ConnectRequest(BaseModel):
     terminal_path: str | None = Field(default=None, max_length=1024)
     label: str | None = Field(default=None, max_length=90)
+    account_type: str = Field(default="propfirm", pattern="^(propfirm|real|demo)$")
+    phase: str = Field(default="funded", max_length=32)
+    prop_firm: str | None = Field(default=None, max_length=90)
+    daily_loss_pct: float = Field(default=3.0, ge=0, le=50)
+    max_loss_pct: float = Field(default=10.0, ge=0, le=100)
 
 
 class HistoryRequest(BaseModel):
@@ -84,7 +89,11 @@ class MT5Bridge:
             "equity":entry.get("equity",0.0),"name":entry.get("label",""),
             "terminal_path":entry.get("terminal_path",""),
             "status":"connected" if key==self.active_id else "saved",
-            "symbols_count":len(entry.get("symbols",[]))}
+            "symbols_count":len(entry.get("symbols",[])),
+            "account_type":entry.get("account_type","real"),"phase":entry.get("phase",""),
+            "prop_firm":entry.get("prop_firm",""),
+            "daily_loss_pct":entry.get("daily_loss_pct",3.0),
+            "max_loss_pct":entry.get("max_loss_pct",10.0)}
     def list(self):
         with self.lock:
             return {"active_id":self.active_id,
@@ -149,6 +158,11 @@ class MT5Bridge:
                 "equity":float(info.get("equity",0)),
                 "label":(payload.label or original.get("label") or f"MT5 {info['login']}")[:90],
                 "terminal_path":path,
+                "account_type":payload.account_type,
+                "phase":payload.phase,
+                "prop_firm":payload.prop_firm or "",
+                "daily_loss_pct":payload.daily_loss_pct,
+                "max_loss_pct":payload.max_loss_pct,
                 "symbols":original.get("symbols",[]),
             }
             self.accounts[tid]=registered
