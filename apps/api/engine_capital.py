@@ -98,6 +98,29 @@ def mutate_exit(rng: random.Random, capital: dict, a: tuple[float,float],
     return results[0],results[1]
 
 
+DEFAULT_RISK_RULES = {
+    "max_daily_gain_pct": 0., "max_weekly_gain_pct": 0.,
+    "max_monthly_gain_pct": 0., "max_account_gain_pct": 0.,
+    "max_consecutive_wins": 0, "max_daily_loss_pct": 0.,
+    "max_weekly_loss_pct": 0., "max_monthly_loss_pct": 0.,
+    "max_account_loss_pct": 0., "max_consecutive_losses": 0,
+    "min_reward_risk_ratio": 0.,
+}
+
+def normalize_risk_rules(config: dict) -> dict:
+    if not isinstance(config,dict):
+        raise ValueError("La configuración de riesgo debe ser un objeto.")
+    rules={**DEFAULT_RISK_RULES,**config}
+    for key in DEFAULT_RISK_RULES:
+        val=rules[key]
+        limit=100 if "consecutive" in key else 200 if key=="max_account_gain_pct" else 100
+        if not isinstance(val,(int,float)) or isinstance(val,bool) or not np.isfinite(val) or val<0 or val>limit:
+            raise ValueError("Valor de riesgo inválido: "+key)
+        if "consecutive" in key and int(val)!=val:
+            raise ValueError("Las rachas deben ser enteras.")
+    return rules
+
+
 @njit(cache=True)
 def simulate_capital(
     signals, op, high, low, close, atr, days, start, end,
@@ -106,6 +129,8 @@ def simulate_capital(
     breakeven, be_trigger_r, trailing, trailing_atr, max_hold_bars,
     max_trades_day, cooldown_bars, daily_stop_pct, total_stop_pct,
     profit_stop_pct,
+    allow_entry=None,forced_exit=None,weeks=None,months=None,
+    max_gains=None,max_losses=None,max_consecutive_wins=0,max_consecutive_losses=0,
 ):
     """Output entry-day R multiples and entry days for comparable summaries.
 
@@ -126,6 +151,13 @@ def simulate_capital(
     equity=1.
     daily_open=1.
     current_day=days[max(0,start)]
+    current_week=weeks[max(0,start)] if weeks is not None else 0
+    current_month=months[max(0,start)] if months is not None else 0
+    week_open=1.
+    month_open=1.
+    consecutive_wins=0
+    consecutive_losses=0
+    paused_for_streak=False
     trades_today=0
     last_exit=-1000000
     for i in range(max(41,start),end):
@@ -133,7 +165,34 @@ def simulate_capital(
             current_day=days[i]
             daily_open=equity
             trades_today=0
+            consecutive_wins=0
+            consecutive_losses=0
+            paused_for_streak=False
+        if weeks is not None and weeks[i]!=current_week:
+            current_week=weeks[i]
+            week_open=equity
+        if months is not None and months[i]!=current_month:
+            current_month=months[i]
+            month_open=equity
         if side == 0:
+            if allow_entry is not None and not allow_entry[i]:
+                continue
+            if paused_for_streak:
+                continue
+            if max_gains is not None and max_losses is not None:
+                d_pct=(equity/daily_open-1.)*100. if daily_open>0. else -100.
+                w_pct=(equity/week_open-1.)*100. if week_open>0. else -100.
+                m_pct=(equity/month_open-1.)*100. if month_open>0. else -100.
+                a_pct=(equity-1.)*100.
+                if ((max_gains[0]>0 and d_pct>=max_gains[0]) or
+                    (max_gains[1]>0 and w_pct>=max_gains[1]) or
+                    (max_gains[2]>0 and m_pct>=max_gains[2]) or
+                    (max_gains[3]>0 and a_pct>=max_gains[3]) or
+                    (max_losses[0]>0 and d_pct<=-max_losses[0]) or
+                    (max_losses[1]>0 and w_pct<=-max_losses[1]) or
+                    (max_losses[2]>0 and m_pct<=-max_losses[2]) or
+                    (max_losses[3]>0 and a_pct<=-max_losses[3])):
+                    continue
             if equity <= 0 or equity < 1.-total_stop_pct/100.:
                 continue
             day_pct=(equity/daily_open-1.)*100. if daily_open>0. else -100.
@@ -161,7 +220,9 @@ def simulate_capital(
             take_distance=tp_factor*initial_distance if exit_code in (0,2) else atr[i-1]*tp_factor
             target=entry+side*take_distance
         exit_price=np.nan
-        if modeling==0:
+        if forced_exit is not None and forced_exit[i]:
+            exit_price=op[i]
+        elif modeling==0:
             if side==1 and (op[i]<=stop or op[i]>=target):
                 exit_price=op[i]
             elif side==-1 and (op[i]>=stop or op[i]<=target):
@@ -194,6 +255,14 @@ def simulate_capital(
                 equity=max(0.,equity+r*risk_pct/100.)
             else:
                 equity=max(0.,equity*(1.+r*risk_pct/100.))
+            if r>0:
+                consecutive_wins+=1
+                consecutive_losses=0
+            elif r<0:
+                consecutive_losses+=1
+                consecutive_wins=0
+            if (max_consecutive_wins>0 and consecutive_wins>=max_consecutive_wins) or (max_consecutive_losses>0 and consecutive_losses>=max_consecutive_losses):
+                paused_for_streak=True
             side=0
             last_exit=i
         else:
