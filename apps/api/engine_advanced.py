@@ -370,6 +370,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             return dict(
                 gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),signals=signals,in_sample=metrics_is,
                 reference_cost_price=cost_reference,
+                timestamp=df["timestamp"].to_numpy(),
                 trades_is=r_is,days_is=d_is,estimated_cost_bps=is_prices_cost[side],
                 optimization_metrics=optimization_metrics,
                 dataframe=(op,hi,lo,close,atr,days,cut,n,allow_entry,forced_exit,weeks,months),
@@ -431,8 +432,25 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                         evaluated.append(trial)
         all_trials.extend(evaluated)
 
-    # Only training metrics determine the shortlist; never rank by OOS.
-    shortlist = sorted(all_trials,key=lambda t:(t["score"],t["in_sample"]["trades"]),reverse=True)[:12]
+    # DSR's multiple-test correction counts attempted strategies on this SAME market.
+    # Applying quality to all IS candidates before selecting the shortlist avoids
+    # accidentally using OOS metrics to tune the quality thresholds.
+    valid_trials=[]
+    attempted_same_market=max(1,len(all_trials))
+    for trial in all_trials:
+        bars=trial["dataframe"]
+        realized=realized_quality(trial["trades_is"],trial["days_is"],bars[5][:bars[6]],
+                                  cfg["risk_pct"],sizing,trial["in_sample"],attempted_same_market)
+        trial["quality_is"]=realized
+        trial["quality_reasons_is"]=evaluate_quality(realized,quality_cfg)
+        if not trial["quality_reasons_is"]:
+            valid_trials.append(trial)
+    # Only IS metrics determine the shortlist; never rank by held-out OOS.
+    shortlist = sorted(valid_trials,key=lambda t:(t["score"],t["in_sample"]["trades"]),reverse=True)[:12]
+    if len(valid_trials)<len(all_trials):
+        warnings.append(f"Filtro de calidad IS: {len(all_trials)-len(valid_trials)} de {len(all_trials)} candidatos descartados antes de evaluar OOS.")
+    if not valid_trials and all_trials:
+        warnings.append("Los filtros de calidad rechazaron todos los candidatos en IS; reduce restricciones si deseas ampliar la exploración.")
     candidates = []
     for i,trial in enumerate(shortlist):
         gene = trial["gene"]
@@ -450,7 +468,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         mc = bootstrap(
             r_oos,cfg["risk_pct"],cfg["mc_iterations"],cfg["prop_max_pct"],1000+i,sizing,
         )
-        reasons = []
+        quality_oos=realized_quality(r_oos,d_oos,days[cut:n],cfg["risk_pct"],sizing,metrics_oos,attempted_same_market)
+        reasons=["Filtro OOS: "+reason for reason in evaluate_quality(quality_oos,quality_cfg)]
         # OOS funding diagnostics never influence candidate score or genetic selection.
         funding_is=trial["optimization_metrics"].get("funding_evaluation_is")
         funding_oos=None
@@ -486,6 +505,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             optimization_metrics_is=trial["optimization_metrics"],
             funding_evaluation_is=funding_is,funding_evaluation_oos=funding_oos,
             in_sample=trial["in_sample"],
+            quality_is=trial["quality_is"],quality_oos=quality_oos,
+            estimated_cost_bps=trial["estimated_cost_bps"],
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
         ))
@@ -495,7 +516,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         "Sharpe/Sortino/Calmar usan anualización 252 con PnL realizado al cierre del trade; no reconstruyen mark-to-market diario.",
         "Pass Rate de fondeo usa las fases, límites, consistencia, días mínimos y percentiles configurados; es un proxy Monte Carlo con balance realizado, NO cumplimiento íntegro de reglas de la firma.",
         "Evaluación exploratoria: el split IS/OOS no sustituye walk-forward ni forward testing.",
-        "Comisiones, spread variable, swaps, slippage y ejecución tick a tick no están modelados.",
+        "Costes manuales: cuando se activan, spread/slippage, comisión y financiación estimada se convierten a bps con contratos introducidos por el usuario, calibrados solo con precio IS. Swap usa días estimados, no el holding real; MT5 no está conectado.",
         "El capital inicial y sizing afectan el balance estimado, no generan cotizaciones reales.",
         "El multi-TF combinado aplica únicamente una tendencia HTF EMA20/50 con barras completas.",
         "Barridas: Londres 08:00–16:00 (Europe/London), Tokio 09:00–17:00 (Asia/Tokyo); después del cierre de la sesión y hasta medianoche local. Confirma la zona horaria de origen del CSV.",
@@ -507,5 +528,6 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     ]
     return dict(
         tested=len(all_trials),accepted=sum(1 for c in candidates if c["accepted"]),
-        optimization_objective=optimization,funding_config=funding,candidates=candidates,warnings=warnings,
+        optimization_objective=optimization,funding_config=funding,quality_config=quality_cfg,
+        cost_config=costs_cfg,candidates=candidates,warnings=warnings,
     )
