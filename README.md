@@ -70,3 +70,16 @@ El Creador de Algoritmos ofrece las pestañas **Configuración** e **Indicadores
 - **Indicadores macroeconómicos:** grupos de volatilidad/riesgo, tipos de EE. UU., tipos internacionales, dólar/FX, inflación, empleo, actividad, liquidez, materias primas, sentimiento y derivados. La interfaz permite seleccionar series y preparar una regla (subida/bajada vs observación previa o umbral, más retardo mínimo). **No hay ingesta macro histórica conectada y esas reglas no se ejecutan.** Una sesión con reglas macro seleccionadas bloquea el backtest, tanto en la UI como en FastAPI, para evitar ignorarlas silenciosamente.
 
 La futura implementación de series macro debe conservar **vintage y observaciones históricas tal como se conocían entonces**, fecha real de publicación, revisiones, calendario, hora/zona y latencia. Una serie revisada actual no sirve para un backtest point-in-time sin controles adicionales.
+
+
+### Gestión de capital: salidas y límites
+
+La tercera pestaña, **Gestión de capital**, permite explorar tres motores implementados:
+
+- **ATR ligado:** SL_distancia = ATR_anterior × SL_multiplicador; TP_distancia = SL_distancia × TP_multiplicador. Ejemplo: ATR 10, SL×1.5 y TP×2 ⇒ SL 15, TP 30 unidades.
+- **ATR independiente:** SL_distancia = ATR_anterior × A; TP_distancia = ATR_anterior × B.
+- **Porcentaje:** SL_distancia = precio_entrada × porcentaje/100; TP_distancia = SL_distancia × multiplicador_TP.
+
+Cada parámetro de SL/TP se configura con **Desde / Pasos / Hasta** y participa en la búsqueda aleatoria o genética. Los parámetros seleccionados usando el tramo IS permanecen sin cambios al evaluar el tramo OOS. Se modelan también breakeven tras cierre de vela, trailing ATR tras cierre de vela, salida por número de barras, cooldown, máximo de trades por día, bloqueo por pérdida realizada diaria o total y beneficio realizado diario. Los modos por pips (sin información confiable del símbolo), pivote de swing, TP parcial y ATR adaptativo permanecen marcados **En desarrollo**, en lugar de simularse como si estuvieran implementados.
+
+**Advertencias:** el motor trabaja con OHLC y costes básicos; al tocar simultáneamente SL y TP dentro de una barra, asume SL primero. Los límites de balance no modelan drawdown flotante, spread/slippage variable, liquidaciones de broker o reglas exactas de cada firma de fondeo. La API científica FastAPI y su almacenamiento aún no están publicados como servicio conectado a la web de Vercel. La visualización es funcional como configurador, pero no habilita backtesting de producción hasta desplegar la API.
