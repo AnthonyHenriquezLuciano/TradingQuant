@@ -83,7 +83,7 @@ export function StrategyConfigurator({config:c,datasetList,loading,onChange,onUp
  const tfs=(c.timeframes?.length?c.timeframes:[c.timeframe]).filter(v=>TF.some(([key])=>key===v));
  const ranges={...DEFAULT_INDICATOR_RANGES,...c.indicator_ranges};
  const cap={...DEFAULT_CAPITAL,...c.capital};
- const usedKeys=(cap.exit_mode==="atr_classic"?["sl_atr","tp_atr"]:cap.exit_mode==="percent"?["sl_percent","tp_multiplier"]:["sl_atr","tp_multiplier"]) as const;
+ const usedKeys:("sl_atr"|"tp_atr"|"sl_percent"|"tp_multiplier")[] = cap.exit_mode==="atr_classic"?["sl_atr","tp_atr"]:cap.exit_mode==="percent"?["sl_percent","tp_multiplier"]:["sl_atr","tp_multiplier"];
  const invalidCapital=usedKeys.some(k=>{const v=cap[k];return !Number.isFinite(v.from)||!Number.isFinite(v.to)||!Number.isFinite(v.step)||v.step<=0||v.from>v.to;})||c.prop_daily_pct>c.prop_max_pct;
  const multiNeedsTwo=c.multi_tf!=="individual"&&tfs.length<2;
  const invalidPeriod=Boolean(c.start_date&&c.end_date&&c.start_date>c.end_date);
