@@ -8,6 +8,7 @@ services:
     plan: 1c-2g
     region: virginia
     numInstances: 1
+    autoDeployTrigger: checksPass
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: ./apps/api
     healthCheckPath: /health
