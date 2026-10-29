@@ -83,3 +83,25 @@ def test_objective_propagated_through_engine(objective):
         assert "optimization_score" in cand
         assert "optimization_metrics_is" in cand
         assert "out_of_sample" in cand
+
+
+def test_choice_of_objective_changes_preferred_strategy():
+    high_hit_rate=[1.,1.,-.5,-.5]
+    high_dollar_profit=[8.,-1.,-1.,-1.]
+    score_hits=score("win_rate",high_hit_rate)[0]
+    score_hits_alt=score("win_rate",high_dollar_profit)[0]
+    pnl_hits=score("net_profit",high_hit_rate)[0]
+    pnl_alt=score("net_profit",high_dollar_profit)[0]
+    assert score_hits>score_hits_alt
+    assert pnl_alt>pnl_hits
+
+
+def test_in_sample_score_unaffected_by_out_of_sample_values():
+    # Objective scoring only sees the training slice. Mutating future trades
+    # cannot change the selected strategy's training score.
+    train_r=np.array([1.,.5,-.5,1.,-.5])
+    train_days=np.arange(1,6)
+    a=objective_score("sharpe",train_r,train_days,train_days,1.,"compound",5000.,3.,10.,42)[0]
+    full=np.r_[train_r,100.,-100.]
+    b=objective_score("sharpe",full[:5],np.arange(1,8)[:5],train_days,1.,"compound",5000.,3.,10.,42)[0]
+    assert a==pytest.approx(b)
