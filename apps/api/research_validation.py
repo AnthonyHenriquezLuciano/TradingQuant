@@ -154,6 +154,7 @@ def realized_quality(r,days,observed_days,risk,sizing,metrics,trial_count=1):
       "trades":int(r.size),"win_rate_pct":float(np.mean(r>0)*100.) if r.size else 0.,
       "max_drawdown_pct":float(metrics["max_drawdown_pct"]),
       "trades_per_day":float(r.size/duration),
+      "max_trades_observed_day":int(np.unique(days,return_counts=True)[1].max()) if len(days) else 0,
       "trades_per_week":float(r.size/(duration/5.)),
       "trades_per_month":float(r.size/(duration/21.)),
       "observed_days":duration,
@@ -180,6 +181,6 @@ def evaluate_quality(info, config):
         key={"day":"trades_per_day","week":"trades_per_week","month":"trades_per_month"}[frequency]
         if info[key]<c["min_trades"]:
             reasons.append("Frecuencia de operaciones inferior al mínimo")
-    if c["max_trades_per_day"] and info["trades_per_day"]>c["max_trades_per_day"]:
+    if c["max_trades_per_day"] and info["max_trades_observed_day"]>c["max_trades_per_day"]:
         reasons.append("Exceso de operaciones por día")
     return reasons
