@@ -18,6 +18,7 @@ from engine import (
     simulate, summarize, bootstrap,
 )
 from market_setups import SITUATIONS, SOURCE_ZONES, sweep_reference, sweep_signals
+from engine_capital import normalize_capital,MODE_CODES,exit_keys,sample_exit,mutate_exit,simulate_capital
 
 ORDER = list(INTERVALS)
 
@@ -221,6 +222,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     if cfg.get("initial_deposit", 5000) < 100:
         raise ValueError("El depósito inicial debe ser al menos USD 100.")
     ranges = checked_ranges(cfg)
+    capital = normalize_capital(cfg)
+    exit_code=MODE_CODES[capital["exit_mode"]]
     source_timezone = cfg.get("source_timezone", "UTC")
     if source_timezone not in SOURCE_ZONES:
         raise ValueError("Zona horaria de los datos inválida.")
@@ -275,11 +278,11 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             k: sweep_reference(df,k,source_timezone,tf)
             for k in families if k in SITUATIONS
         }
-        seen: set[tuple[int,int,int,int]] = set()
+        seen: set[tuple[int,int,int,int,float,float]] = set()
         evaluated: list[dict] = []
 
-        def assess(gene: tuple[int,int,int], side: int) -> dict | None:
-            key = (*gene, side)
+        def assess(gene: tuple[int,int,int], side: int, pair: tuple[float,float]) -> dict | None:
+            key = (*gene, side, *pair)
             if key in seen:
                 return None
             seen.add(key)
@@ -292,9 +295,14 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 signals = make_signals(kind,fast,slow,close,hi,lo)
             if higher_bias is not None:
                 signals = np.where(signals == higher_bias,signals,0).astype(np.int8)
-            r_is,d_is = simulate(
+            r_is,d_is = simulate_capital(
                 signals,op,hi,lo,close,atr,days,0,cut,
-                cfg["rr"],cfg["atr_multiplier"],cfg["cost_bps"],side,sampling_model,
+                exit_code,pair[0],pair[1],cfg["cost_bps"],side,sampling_model,
+                cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
+                capital["breakeven_enabled"],capital["breakeven_r"],
+                capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
+                capital["max_trades_per_day"],capital["cooldown_bars"],
+                cfg["prop_daily_pct"],cfg["prop_max_pct"],capital["stop_after_daily_pct"],
             )
             metrics_is = summarize(
                 r_is,d_is,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -304,7 +312,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             if metrics_is["trades"] < max(4,cfg["min_trades"]):
                 score -= 100.
             return dict(
-                gene=gene,side=side,score=float(score),signals=signals,in_sample=metrics_is,
+                gene=gene,side=side,exit_pair=pair,score=float(score),signals=signals,in_sample=metrics_is,
                 dataframe=(op,hi,lo,close,atr,days,cut,n),
                 timeframe=tf,context=htf,model=job_type,
             )
@@ -314,10 +322,11 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             while len(evaluated) < max_eval and attempts < max_eval*25:
                 attempts += 1
                 gene = random_gene(rng,families,ranges)
+                pair = sample_exit(rng,capital)
                 for side in sides_for(gene):
                     if len(evaluated) >= max_eval:
                         break
-                    trial = assess(gene,side)
+                    trial = assess(gene,side,pair)
                     if trial is not None:
                         evaluated.append(trial)
         else:
@@ -333,15 +342,17 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                     attempts += 1
                     if not population or gen == 0:
                         gene = random_gene(rng,families,ranges)
+                        pair = sample_exit(rng,capital)
                     else:
                         elite = sorted(population,key=lambda t:t["score"],reverse=True)[:max(2,len(population)//2)]
-                        mother = rng.choice(elite)["gene"]
-                        father = rng.choice(elite)["gene"]
-                        gene = mutate_or_cross(rng,mother,father,families,ranges)
+                        mother = rng.choice(elite)
+                        father = rng.choice(elite)
+                        gene = mutate_or_cross(rng,mother["gene"],father["gene"],families,ranges)
+                        pair = mutate_exit(rng,capital,mother["exit_pair"],father["exit_pair"])
                     for side in sides_for(gene):
                         if len(new_gen) >= target:
                             break
-                        trial = assess(gene,side)
+                        trial = assess(gene,side,pair)
                         if trial is not None:
                             new_gen.append(trial)
                             evaluated.append(trial)
@@ -352,10 +363,11 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             while len(evaluated)<max_eval and attempts<max_eval*50:
                 attempts += 1
                 gene = random_gene(rng,families,ranges)
+                pair = sample_exit(rng,capital)
                 for side in sides_for(gene):
                     if len(evaluated) >= max_eval:
                         break
-                    trial = assess(gene,side)
+                    trial = assess(gene,side,pair)
                     if trial is not None:
                         evaluated.append(trial)
         all_trials.extend(evaluated)
@@ -367,9 +379,15 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         gene = trial["gene"]
         kind,fast,slow = gene
         op,hi,lo,cl,atr,days,cut,n = trial["dataframe"]
-        r_oos,d_oos = simulate(
+        pair=trial["exit_pair"]
+        r_oos,d_oos = simulate_capital(
             trial["signals"],op,hi,lo,cl,atr,days,cut,n,
-            cfg["rr"],cfg["atr_multiplier"],cfg["cost_bps"],trial["side"],sampling_model,
+            exit_code,pair[0],pair[1],cfg["cost_bps"],trial["side"],sampling_model,
+            cfg["risk_pct"],cfg["initial_deposit"],sizing=="fixed",
+            capital["breakeven_enabled"],capital["breakeven_r"],
+            capital["trailing_enabled"],capital["trailing_atr"],capital["max_bars_in_trade"],
+            capital["max_trades_per_day"],capital["cooldown_bars"],
+            cfg["prop_daily_pct"],cfg["prop_max_pct"],capital["stop_after_daily_pct"],
         )
         metrics_oos = summarize(
             r_oos,d_oos,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
@@ -397,7 +415,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             id="candidate-"+str(i+1),family=FAMILIES[kind],params=params,
             timeframe=trial["timeframe"],context_timeframe=trial["context"],
             direction="long" if trial["side"] == 1 else "short",
-            model=trial["model"],in_sample=trial["in_sample"],
+            model=trial["model"],exit_mode=capital["exit_mode"],
+            exit_parameters={exit_keys(capital)[0]:pair[0],exit_keys(capital)[1]:pair[1]},
+            in_sample=trial["in_sample"],
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
         ))
@@ -408,6 +428,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         "El multi-TF combinado aplica únicamente una tendencia HTF EMA20/50 con barras completas.",
         "Barridas: Londres 08:00–16:00 (Europe/London), Tokio 09:00–17:00 (Asia/Tokyo); después del cierre de la sesión y hasta medianoche local. Confirma la zona horaria de origen del CSV.",
         "Monte Carlo remuestrea operaciones OOS; no simula caminos de mercado.",
+        "Los límites de pérdida y operaciones usan balance realizado, no drawdown flotante intrabar.",
+        "BE y trailing se actualizan tras cerrar vela. Sin datos tick, los gaps y salidas parciales no están completamente modelados.",
     ]
     return dict(
         tested=len(all_trials),accepted=sum(1 for c in candidates if c["accepted"]),
