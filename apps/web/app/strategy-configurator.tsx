@@ -32,6 +32,7 @@ export type IndicatorRanges = {
  previous_day_low_sweep_buffer_min:number;previous_day_low_sweep_buffer_step:number;previous_day_low_sweep_buffer_max:number;
 };
 export const DEFAULT_INDICATOR_RANGES:IndicatorRanges={
+ tech_period_min:10,tech_period_step:5,tech_period_max:30,
  ema_fast_min:5,ema_fast_step:1,ema_fast_max:28,
  ema_slow_min:29,ema_slow_step:1,ema_slow_max:90,
  rsi_period_min:7,rsi_period_step:1,rsi_period_max:25,
