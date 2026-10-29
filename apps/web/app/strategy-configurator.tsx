@@ -4,7 +4,7 @@ import {useState} from "react";
 import {
  ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Database,
  Dna, FlaskConical, LoaderCircle, Play, Settings2, ShieldCheck,
- SlidersHorizontal, Sparkles, UploadCloud, ChartNoAxesCombined, Activity, ListFilter, TrendingUp, Wallet
+ SlidersHorizontal, Sparkles, UploadCloud, ChartNoAxesCombined, Activity, ListFilter, TrendingUp, Wallet, Clock3
 } from "lucide-react";
 import {IndicatorCatalog, type MacroRule} from "./indicator-catalog";
 import {CapitalManagement, DEFAULT_CAPITAL, type CapitalSettings} from "./capital-management";
