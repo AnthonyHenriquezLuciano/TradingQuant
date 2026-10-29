@@ -167,3 +167,11 @@ Se eliminaron controles duplicados e inertes de ratio TP/SL, ATR, riesgo y DD de
 El Dockerfile del motor se incluye en apps/api/Dockerfile y docker-compose.yml crea un volumen de CSV y Numba, con puerto enlazado a localhost para evitar una API abierta sin autenticación. Para conectar Vercel se requiere un host persistente HTTPS para FastAPI, configurar TRADINGQUANT_CORS_ORIGINS y la variable NEXT_PUBLIC_API_URL apuntando a dicho host. La web publicada no puede ejecutar las simulaciones si no existe ese backend público. La sincronización MT5 sigue sin implementarse.
 
 Alcance: los resultados son OHLC u open-bar, no ejecución tick real; tampoco hay garantía de rentabilidad ni equivalencia total a StrategyQuant. La evaluación histórica OOS, el bootstrap, las ventanas Walk-Forward y Multiverso son pruebas experimentales y deben contrastarse con forward testing.
+
+## Despliegue del motor científico en Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/AnthonyHenriquezLuciano/TradingQuant)
+
+El archivo [`render.yaml`](./render.yaml) prepara **un servicio Docker de pago de 2 GB de RAM y un disco persistente de 5 GB**. **Revisa y aprueba el coste en Render** antes de crearlo; el botón no despliega ni factura sin tu confirmación. Un servicio Free no serviría para conservar los CSV en disco. El proceso de análisis permanece en memoria y se interrumpirá si reinicias la instancia. Al terminar, copia la URL HTTPS y configúrala en *TradingQuant → Datos históricos → Conexión con motor de investigación → Guardar URL → Probar conexión*, o utiliza la variable `NEXT_PUBLIC_API_URL` en Vercel.
+
+**Seguridad:** API actualmente sin autenticación por usuario; no publicarla a terceros ni subir datos sensibles. Para producción multiusuario debe protegerse con autenticación, límites y una cola duradera.
