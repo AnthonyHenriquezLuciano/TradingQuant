@@ -16,6 +16,7 @@ export type AlgoSession<TConfig> = {
   updatedAt: string;
   status: "draft" | "running" | "results";
   config: TConfig;
+  accountId?: string;
   runId?: string;
   found?: number;
 };
