@@ -1229,3 +1229,11 @@ html,body{background:#090909;color:#f1eee8}
 .tq-api-pill.offline{border-color:#7b3931;color:#f09b89;background:#291a16}
 .tq-api-pill.checking{border-color:#84612e;color:#e6c27f}
 @media(max-width:680px){.tq-api-controls input{width:100%;max-width:none;flex:0 0 100%}}
+
+
+/* Large CSV import — chunk transfer and server-side streaming validation */
+.tq-upload-progress{width:min(100%,640px);display:flex;flex-direction:column;gap:8px;margin:14px auto;text-align:left;border:1px solid #715633;background:#1d1710;padding:14px;border-radius:10px}
+.tq-upload-progress>div:first-child{display:flex;gap:15px;align-items:center;justify-content:space-between;font-size:11px;color:#dfc69b}
+.tq-upload-progress>div:first-child strong{font-size:15px;color:#f0d6a5}
+.tq-upload-progress .tq-r-track{height:9px;width:100%}
+.tq-upload-progress small{font-size:10px;color:#ac987b}
