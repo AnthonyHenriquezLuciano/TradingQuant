@@ -106,3 +106,19 @@ En **Configuración → Objetivo de optimización** puedes seleccionar entre 11 
 - **Pass Rate Fondeo:** proxy de tasa de aprobación de evaluación de dos fases (metas 8% y 5%). En cada fase remuestrea 128 trayectorias de jornadas IS durante un máximo de 60 jornadas, con límites de pérdidas diarias y totales realizados configurados en la sesión; no exige mínimo de días. El cálculo **no reproduce** pérdidas flotantes, ejecución intrabar real, márgenes, reglas especiales de fondeadoras, calendarios futuros ni dependencia temporal real de retornos. Esta estimación no se debe presentar como una probabilidad verdadera de aprobar una cuenta de fondeo.
 
 Los candidatos con menos operaciones IS que el mínimo configurado reciben una penalización de selección. Cada objetivo y valor aparece en el objeto de resultados junto con las métricas de validación OOS.
+
+
+### Fondeo: fases, drawdown, consistencia y aprobación por tiempo
+
+La quinta pestaña **Fondeo** guarda una configuración por sesión y puede activarse/desactivarse. Incluye presets **editables** FTMO 2-Step, FTMO Swing (plantilla), FundingPips 2-Step Standard, The5ers High Stakes, Topstep Combine 50K, FundedNext Stellar (plantilla) y Lucid Trader Flex (plantilla). Los valores predefinidos son puntos de partida: debes contrastarlos con tu contrato, tipo exacto de cuenta y fecha de la compra.
+
+**Modelo de evaluación soportado:**
+- De **1 a 3 fases**; objetivo porcentual por fase, máximo de días (horizonte de simulación), número mínimo de días, y umbral de beneficio diario para acreditar esos días. 0% significa cualquier día con al menos una **operación cerrada** (no reproduce necesariamente la definición de «trading day» de cada firma, que puede contar aperturas).
+- **DD diario:** límite realizado respecto al saldo de cierre previo menos porcentaje del capital inicial, o límite realizado fijo respecto al saldo inicial. 0% desactiva el límite diario; NO hay equity flotante.
+- **DD total:** estático basado en capital inicial o trailing al cierre (EOD), con opción de impedir que el piso supere el capital inicial.
+- **Consistencia:** sin regla, proporción máxima del mejor día frente al beneficio total, o proporción máxima frente al target que **eleva el objetivo efectivo** (estilo Topstep).
+- **Monte Carlo:** 64–1000 caminos por candidato con bootstrap por bloques de 1–20 días del tramo IS, recomenzando el balance por fase y avanzando solo si la fase previa aprueba. Reporta Pass Rate, aprobación acumulada por fase, P20/P50/P80 **condicionales a aprobar**, promedio de días exitosos, tasa **incondicional** que aprobó dentro del plazo, conteo de éxitos y fallos por DD/tiempo.
+- **Filtrado temporal:** tasa mínima de aprobación (0% = medir sin descartar), percentil de días configurable y máximo de días para ese percentil (0 = ilimitado). Ambos filtros deben superarse para la aceptación. En modo mayor Pass Rate, el objetivo pondera la tasa de aprobación por velocidad: tasa/(1+días del percentil elegido/365).
+- El motor hace selección en IS. Las estimaciones OOS se producen únicamente para diagnóstico y no afectan la selección genética. La vista de resultados muestra tasa OOS, P20 y probabilidad OOS dentro del plazo.
+
+**Restricciones científicas:** Solo disponemos de PnL *realizado* al cerrar cada trade y de días de los cierres. Por tanto no es posible verificar DD intrabar/tick, límite de equity flotante, límites de margen, slippage, restricciones de noticias, tamaño máximo de posición o el día en que se abrió un trade que cerró otro día. Las tasas simuladas son **proxies**, no probabilidades de aprobación reales ni garantías de cumplimiento de las reglas de FTMO, FundingPips, Topstep u otras firmas. Algunos presets como Topstep usan trailing EOD aproximado aunque la regla oficial puede evaluar equity intradía. El proyecto necesita un feed tick/broker y un simulador basado en equity mark-to-market para reproducir los contratos por completo.
