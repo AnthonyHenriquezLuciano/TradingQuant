@@ -50,6 +50,7 @@ class ResearchJobs:
                 output={"id":job_id,"created_at":now,
                         "dataset_id":config["dataset_id"],"config":config,**result}
                 with self.lock:
+                    output["elapsed_seconds"]=int(monotonic()-self.jobs[job_id]["started"])
                     job=self.jobs[job_id]
                     job.update(status="completed",phase="completado",result=output,
                                checked=int(result["tested"]),total=int(result["tested"]),
