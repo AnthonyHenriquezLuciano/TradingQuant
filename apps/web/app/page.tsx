@@ -95,7 +95,7 @@ export default function Page(){
  const [tokenDraft,setTokenDraft]=useState("");
  const [apiStatus,setApiStatus]=useState<"unknown"|"checking"|"online"|"offline">("unknown");
  const API=apiUrl;
- const authHeaders=accessToken?{Authorization:"Bearer "+accessToken}:{};
+ const authHeaders:Record<string,string>=accessToken?{Authorization:"Bearer "+accessToken}:{};
  const [selectedCandidate,setSelectedCandidate]=useState<string|null>(null);
  const [jobStatus,setJobStatus]=useState<{id:string;status:string;phase:string;percent:number;checked:number;total:number;elapsed_seconds:number;error?:string|null}|null>(null);
  const [profile,setProfile]=useState<AssetDiagnostics|null>(null);
