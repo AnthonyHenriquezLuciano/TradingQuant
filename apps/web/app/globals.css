@@ -865,3 +865,19 @@ html,body{background:#090909;color:#f1eee8}
 .tq-hours-timezone select{height:37px;min-width:220px;max-width:100%;border:1px solid #695234;background:#15120e;color:#ead5b0;padding:0 12px;border-radius:7px;outline:none;color-scheme:dark}
 .tq-hours-timezone select:focus{border-color:#c9ab73}
 @media(max-width:600px){.tq-hours-timezone{align-items:stretch;flex-direction:column;gap:8px}.tq-hours-timezone select{width:100%;min-width:0}}
+
+
+/* Algorithm builder — optimization target selector and contextual scientific help */
+.tq-optimization-row{align-items:start}
+.tq-optimization-row .tq-one-label{padding-top:11px}
+.tq-optimization-row .tq-one-value{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
+.tq-optimization-select{display:flex;align-items:center;gap:10px;max-width:440px}
+.tq-optimization-select select{background:#11100e;border:1px solid #5a4831;color:#eddabb;border-radius:8px;min-height:41px;min-width:0;width:100%;font-size:12px;font-weight:750;padding:0 36px 0 12px;outline:none;cursor:pointer}
+.tq-optimization-select select:focus{border-color:#d0af73;box-shadow:0 0 0 3px #b89b6335}
+.tq-optimization-select>.tq-hint-icon{position:relative;flex-shrink:0;display:grid;place-items:center;width:35px;height:35px;border:1px solid #5b4931;border-radius:8px;background:#211a12;color:#d1b179;transition:all .18s;cursor:pointer}
+.tq-optimization-select>.tq-hint-icon:hover,.tq-optimization-select>.tq-hint-icon[aria-expanded="true"]{color:#f4d5a2;background:#3a2b19;border-color:#b99860}
+.tq-optimization-explanation{border:1px solid #665033;background:linear-gradient(120deg,#292115,#171410);border-radius:9px;padding:13px 15px;max-width:590px}
+.tq-optimization-explanation>span{font-size:9px;letter-spacing:1px;color:#c8a66d;font-weight:800}
+.tq-optimization-explanation p{margin:8px 0 9px;color:#efdcbb;font-size:11px;line-height:1.75}
+.tq-optimization-explanation small{font-size:10px;line-height:1.65;color:#a99c87}
+@media(max-width:620px){.tq-optimization-row .tq-one-value{width:100%}.tq-optimization-select{max-width:none}.tq-optimization-select select{min-height:43px}.tq-optimization-explanation{width:100%}}
