@@ -50,7 +50,8 @@ class PrivateResearchMiddleware(BaseHTTPMiddleware):
 app.add_middleware(PrivateResearchMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("TRADINGQUANT_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(","),
+    allow_origins=[x.strip() for x in os.getenv("TRADINGQUANT_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if x.strip()],
+    allow_origin_regex=r"https://tradingquant(?:-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type","Authorization"],
