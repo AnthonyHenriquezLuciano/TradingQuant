@@ -84,8 +84,6 @@ def time_arrays(frame:pl.DataFrame,source_timezone:str,schedule:dict|None):
             inside=False
         if cfg["avoid_monday_open"] and wd==0 and m<60:
             inside=False
-        if cfg["avoid_rollover"] and (m>=20*60+55 or m<21*60+10 and m>=21*60):
-            inside=False
         # Rollover spans 20:55-21:10 UTC, not 00:00.
         if cfg["avoid_rollover"] and (20*60+55<=m<21*60+10):
             inside=False
