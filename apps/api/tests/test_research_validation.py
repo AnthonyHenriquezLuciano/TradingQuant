@@ -59,9 +59,10 @@ def test_user_costs_convert_spread_commission_and_swaps():
     assert estimated_roundtrip_bps(validate_costs(), "XAUUSD",2000,1,4)==4
 
 
-def test_invalid_costs_and_mt5_not_allowed():
+def test_invalid_costs_and_mt5_snapshot_mode():
+    assert validate_costs({"auto_mt5":True,"use_in_backtest":False})["auto_mt5"] is True
     with pytest.raises(ValueError,match="MT5"):
-        validate_costs({"auto_mt5":True})
+        validate_costs({"auto_mt5":"connected"})
     with pytest.raises(ValueError,match="contrato"):
         validate_costs({"use_in_backtest":True,"instruments":[{
             "symbol":"EURUSD","pip_size":0,"contract_size":100000,"quote_to_usd":1,
