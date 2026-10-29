@@ -210,6 +210,34 @@ def complete_chunked_upload(upload_id:str):
 def check_chunked_upload(upload_id:str):
     return UPLOADS.status(upload_id)
 
+@app.get("/api/local/inbox")
+def list_local_inbox():
+    """List CSV files manually placed in the PC inbox. Never scan other folders."""
+    if os.getenv("TRADINGQUANT_LOCAL_MODE")!="1":
+        raise HTTPException(404,"Importación directa deshabilitada fuera del modo local.")
+    inbox=DATA_DIR.parent/"inbox"
+    inbox.mkdir(parents=True,exist_ok=True)
+    files=[]
+    for p in sorted(inbox.iterdir(),key=lambda x:x.name.lower()):
+        if p.is_file() and not p.is_symlink() and p.suffix.lower()==".csv":
+            stat=p.stat()
+            files.append({"filename":p.name,"size_bytes":stat.st_size})
+        if len(files)>=200:
+            break
+    return {"files":files,"local":True,"max_bytes":MAX_BYTES}
+
+
+class LocalImportRequest(BaseModel):
+    filename:str=Field(min_length=5,max_length=200)
+
+
+@app.post("/api/local/import",status_code=202)
+def import_local_csv(payload:LocalImportRequest):
+    if os.getenv("TRADINGQUANT_LOCAL_MODE")!="1":
+        raise HTTPException(404,"Importación directa deshabilitada fuera del modo local.")
+    return UPLOADS.import_local(payload.filename,DATA_DIR.parent/"inbox")
+
+
 @app.post("/api/datasets/upload")
 async def upload_dataset(file: UploadFile = File(...)):
     if not file.filename or not file.filename.lower().endswith(".csv"):
