@@ -20,6 +20,7 @@ from engine import (
 from market_setups import SITUATIONS, SOURCE_ZONES, sweep_reference, sweep_signals
 from engine_capital import normalize_capital,normalize_risk_rules,MODE_CODES,exit_keys,sample_exit,mutate_exit,simulate_capital
 from engine_schedule import time_arrays,validate_schedule
+from optimization_objectives import validate_objective,objective_score,reproducible_seed
 
 ORDER = list(INTERVALS)
 
@@ -204,6 +205,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     modeling = cfg.get("modeling", "ohlc")
     sizing = cfg.get("sizing", "compound")
     multi = cfg.get("multi_tf", "individual")
+    optimization = validate_objective(cfg.get("optimization_objective", "balanced"))
     if mode not in ("random", "genetic"):
         raise ValueError("Motor de búsqueda no admitido.")
     if modeling not in ("ohlc", "open"):
@@ -265,7 +267,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     all_trials: list[dict] = []
     warnings: list[str] = []
     if mode == "genetic":
-        warnings.append("Sharpe genético estimado a partir de resultados R diarios en días con operaciones; no equivale al Sharpe mark-to-market.")
+        warnings.append("Selección genética por "+optimization+" calculada exclusivamente con trades IS; la evaluación OOS no influye en la selección.")
 
     max_gains=np.array([risk_rules[x] for x in ("max_daily_gain_pct","max_weekly_gain_pct","max_monthly_gain_pct","max_account_gain_pct")],dtype=np.float64)
     max_losses=np.array([risk_rules[x] for x in ("max_daily_loss_pct","max_weekly_loss_pct","max_monthly_loss_pct","max_account_loss_pct")],dtype=np.float64)
@@ -320,12 +322,17 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
                 r_is,d_is,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
                 sizing,cfg["initial_deposit"],
             )
-            score = sharpe_of_daily_trades(r_is,d_is) if mode=="genetic" else metrics_is["expectancy_r"]
+            score, optimization_metrics = objective_score(
+                optimization,r_is,d_is,days[:cut],cfg["risk_pct"],sizing,
+                cfg["initial_deposit"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
+                seed=reproducible_seed(gene,side,pair),
+            )
             if metrics_is["trades"] < max(4,cfg["min_trades"]):
-                score -= 100.
+                score = -1e8 + metrics_is["trades"]
             return dict(
                 gene=gene,side=side,exit_pair=pair,score=float(score),signals=signals,in_sample=metrics_is,
-                dataframe=(op,hi,lo,close,atr,days,cut,n),
+                optimization_metrics=optimization_metrics,
+                dataframe=(op,hi,lo,close,atr,days,cut,n,allow_entry,forced_exit,weeks,months),
                 timeframe=tf,context=htf,model=job_type,
             )
 
@@ -390,7 +397,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     for i,trial in enumerate(shortlist):
         gene = trial["gene"]
         kind,fast,slow = gene
-        op,hi,lo,cl,atr,days,cut,n = trial["dataframe"]
+        op,hi,lo,cl,atr,days,cut,n,allow_entry,forced_exit,weeks,months = trial["dataframe"]
         pair=trial["exit_pair"]
         r_oos,d_oos = simulate_capital(
             trial["signals"],op,hi,lo,cl,atr,days,cut,n,
@@ -431,11 +438,16 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             direction="long" if trial["side"] == 1 else "short",
             model=trial["model"],exit_mode=capital["exit_mode"],
             exit_parameters={exit_keys(capital)[0]:pair[0],exit_keys(capital)[1]:pair[1]},
+            optimization_objective=optimization,optimization_score=trial["score"],
+            optimization_metrics_is=trial["optimization_metrics"],
             in_sample=trial["in_sample"],
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
         ))
     warnings += [
+        "Objetivo de optimización: "+optimization+"; ranking, selección genética y shortlist usan solo datos IS.",
+        "Sharpe/Sortino/Calmar usan anualización 252 con PnL realizado al cierre del trade; no reconstruyen mark-to-market diario.",
+        "Pass Rate es un proxy Monte Carlo IS: 128 simulaciones de dos fases 8% y 5%, máximo 60 días por fase, límites diarios y totales realizados configurados. No estima drawdown flotante ni reglas completas de la firma.",
         "Evaluación exploratoria: el split IS/OOS no sustituye walk-forward ni forward testing.",
         "Comisiones, spread variable, swaps, slippage y ejecución tick a tick no están modelados.",
         "El capital inicial y sizing afectan el balance estimado, no generan cotizaciones reales.",
@@ -449,5 +461,5 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     ]
     return dict(
         tested=len(all_trials),accepted=sum(1 for c in candidates if c["accepted"]),
-        candidates=candidates,warnings=warnings,
+        optimization_objective=optimization,candidates=candidates,warnings=warnings,
     )
