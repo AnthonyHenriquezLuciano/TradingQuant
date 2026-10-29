@@ -27,7 +27,7 @@ from dataset_uploads import UploadManager,UploadInit,CHUNK_BYTES
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-MAX_BYTES = 150 * 1024 * 1024
+MAX_BYTES = min(max(int(os.getenv("TRADINGQUANT_MAX_UPLOAD_MB", "150")), 1), 4096) * 1024 * 1024
 app = FastAPI(title="TradingQuant Scientific API", version="0.1.0")
 UPLOADS=UploadManager(DATA_DIR)
 class PrivateResearchMiddleware(BaseHTTPMiddleware):
