@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 
 CHUNK_BYTES = 2 * 1024 * 1024
-MAX_UPLOAD = 150 * 1024 * 1024
+MAX_UPLOAD = min(max(int(os.getenv("TRADINGQUANT_MAX_UPLOAD_MB", "150")), 1), 4096) * 1024 * 1024
 MAX_ROWS = 5_000_000
 MAX_JOBS = 2
 
