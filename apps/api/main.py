@@ -14,6 +14,7 @@ from engine import load_data, describe_data
 from engine_advanced import run_advanced
 from engine_capital import normalize_capital,normalize_risk_rules
 from engine_schedule import validate_schedule
+from optimization_objectives import OBJECTIVES
 
 DATA_DIR = Path(os.getenv("TRADINGQUANT_DATA_DIR", "./data/uploads")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -82,6 +83,7 @@ class ExplorationRequest(BaseModel):
     end_date: str = ""
     initial_deposit: float = Field(default=5000, ge=100, le=100000000)
     mode: Literal["random","genetic"] = "random"
+    optimization_objective: Literal["balanced","sharpe","sortino","calmar","net_profit","min_drawdown","profit_factor","expectancy","win_rate","recovery_factor","funding_pass_rate"] = "balanced"
     modeling: Literal["open","ohlc"] = "ohlc"
     sizing: Literal["compound","fixed"] = "compound"
     multi_tf: Literal["individual","combined","both"] = "individual"
