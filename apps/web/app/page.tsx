@@ -47,7 +47,7 @@ type Candidate = {
 type Metrics = { trades:number; win_rate:number; profit_factor:number|null; expectancy_r:number; max_drawdown_pct:number; net_return_pct:number; daily_breached:boolean; total_breached:boolean };
 type RunResult = { id:string; created_at:string; dataset_id:string; tested:number; accepted:number; candidates:Candidate[]; warnings:string[]; config:Config };
 type Config = AlgoConfig;
-const DEFAULT_API="http://127.0.0.1:8000"; // Local engine only; never connects to Render
+const DEFAULT_API="http://127.0.0.1:8000"; // Only local scientific engine
 const DEFAULT:Config={ name:"Nueva exploración cuantitativa",dataset_id:"",symbol:"XAUUSD",timeframe:"5m",timeframes:["5m"],start_date:"",end_date:"",initial_deposit:5000,mode:"random",optimization_objective:"balanced",modeling:"ohlc",sizing:"compound",multi_tf:"individual",generations:8,candidates:100,families:["ema_cross","rsi_reversion","breakout"],indicator_ranges:DEFAULT_INDICATOR_RANGES,source_timezone:"UTC",macro_indicators:[],macro_rules:{},capital:DEFAULT_CAPITAL,schedule:DEFAULT_SCHEDULE,funding:DEFAULT_FUNDING,advanced_modifiers:DEFAULT_ADVANCED,quality:DEFAULT_QUALITY,walk_forward:DEFAULT_WALK_FORWARD,multiverse:DEFAULT_MULTIVERSE,costs:DEFAULT_COSTS,direction:"both",risk_pct:0.5,rr:1.0,atr_multiplier:1.5,cost_bps:2,is_ratio:70,min_trades:12,mc_iterations:500,prop_daily_pct:3,prop_max_pct:10 };
 const STEPS=[{title:"Mercado y datos",sub:"Fuente y búsqueda"},{title:"Señales",sub:"Hipótesis y reglas"},{title:"Ejecución",sub:"Riesgo y costes"},{title:"Validación",sub:"Pruebas y filtros"}];
 const formatDate=(value:string)=>{const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleDateString("es-DO",{day:"2-digit",month:"short",year:"numeric"})};
@@ -186,7 +186,7 @@ export default function Page(){
             body:buffer
           });
           transferred=Number(progress.received_bytes);
-          if(transferred<offset+buffer.byteLength)throw Error("Render no confirmó todos los bytes del bloque.");
+          if(transferred<offset+buffer.byteLength)throw Error("El motor local no confirmó todos los bytes del bloque.");
           sent=true;
         }catch(e){
           if(attempt===2)throw Error("La subida se interrumpió en el bloque "+(index+1)+" de "+Math.ceil(file.size/chunkBytes)+". "+(e instanceof Error?e.message:"Error de red"));
@@ -209,7 +209,7 @@ export default function Page(){
      setUploadProgress({percent:95+Math.min(4,Math.floor(attempt/30)),phase:"Validando histórico sin cargarlo entero en memoria",uploaded:file.size,total:file.size});
    }
    if(!result||typeof result.id!=="string"||typeof result.rows!=="number")
-      throw Error("La validación del CSV excedió el tiempo permitido. Comprueba Render → Logs.");
+      throw Error("La validación local excedió el tiempo permitido. Comprueba la ventana «Motor Científico».");
    setDatasets(p=>[result as Dataset,...p.filter(x=>x.id!==result!.id)]);
    change("dataset_id",result.id);
    setUploadProgress({percent:100,phase:"Importación terminada",uploaded:file.size,total:file.size});
@@ -326,7 +326,7 @@ export default function Page(){
    };
    void restore();
    return ()=>{alive=false};
- },[API,accessToken]);
+ },[API]);
  const stepsComplete=Boolean(cfg.dataset_id&&cfg.name.trim()&&cfg.families.length);
  return <div className="shell">
  <aside className={`sidebar ${mobile?"sidebar-open":""}`}>
