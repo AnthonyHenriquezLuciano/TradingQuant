@@ -470,6 +470,93 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
         )
         quality_oos=realized_quality(r_oos,d_oos,days[cut:n],cfg["risk_pct"],sizing,metrics_oos,attempted_same_market)
         reasons=["Filtro OOS: "+reason for reason in evaluate_quality(quality_oos,quality_cfg)]
+
+        # Chronological OOS windows. Pure uses the selected candidate unchanged;
+        # reopt selects from an IS-discovered pool using ONLY the past before
+        # each fold; it does NOT regenerate genetic strategies.
+        wf_report=None
+        if wf_cfg["enabled"] and i<wf_cfg["top_n"]:
+            try:
+                if cut<wf_cfg["min_training_bars"]:
+                    raise ValueError("El tramo de entrenamiento es insuficiente para walk-forward.")
+                windows=walkforward_bounds(cut,n,wf_cfg)
+                fold_data=[]
+                for begin,finish in windows:
+                    chosen=trial
+                    if wf_cfg["mode"]=="reopt":
+                        pool=[x for x in shortlist if x["timeframe"]==trial["timeframe"] and x["model"]==trial["model"] and x["context"]==trial["context"]]
+                        best=-1e15
+                        for alternative in pool:
+                            aa,bb,cc,dd,ee,days_alt,cut_alt,nn,allow_alt,force_alt,weeks_alt,months_alt=alternative["dataframe"]
+                            train_r,train_days=simulate_configured(
+                                alternative["signals"],aa,bb,cc,dd,ee,days_alt,0,begin,
+                                alternative["side"],alternative["exit_pair"],alternative["entry_variant"],
+                                allow_alt,force_alt,weeks_alt,months_alt,alternative["reference_cost_price"])
+                            train_score=(float(np.mean(train_r)) if len(train_r)>0 else -1e12)
+                            if train_score>best:
+                                best=train_score
+                                chosen=alternative
+                    xx=chosen["dataframe"]
+                    w_r,w_d=simulate_configured(
+                        chosen["signals"],xx[0],xx[1],xx[2],xx[3],xx[4],xx[5],begin,finish,
+                        chosen["side"],chosen["exit_pair"],chosen["entry_variant"],
+                        xx[8],xx[9],xx[10],xx[11],chosen["reference_cost_price"])
+                    fold_data.append((w_r,w_d,xx[5][begin:finish]))
+                training_span=max(1,len(np.unique(days[:cut])))
+                is_daily=trial["in_sample"]["net_return_pct"]/training_span
+                wf_report=walkforward_report(windows,fold_data,is_daily,wf_cfg,
+                    cfg["risk_pct"],sizing,cfg["initial_deposit"],cfg["prop_daily_pct"],cfg["prop_max_pct"])
+                if wf_cfg["mode"]=="reopt":
+                    wf_report["method"]="chronological_reselection_from_IS_discovered_pool"
+                if not wf_report["eligible"]:
+                    reasons.append("Walk-Forward: ratio de ventanas satisfactorias inferior al mínimo")
+            except ValueError as exc:
+                wf_report={"enabled":True,"eligible":False,"error":str(exc),"windows":[]}
+                reasons.append("Walk-Forward: "+str(exc))
+
+        # Synthetic universes are drawn solely from the IS historical window.
+        # Recompute signals on synthetic OHLC, never reuse signals from reality.
+        multiverse=None
+        if mv_cfg["enabled"] and i<mv_cfg["top_n"]:
+            try:
+                lookback=min(cut,6000)
+                offset=cut-lookback
+                real_open=op[offset:cut]
+                real_hi=hi[offset:cut]
+                real_lo=lo[offset:cut]
+                real_close=cl[offset:cut]
+                regimes=gaussian_hmm_regimes(np.diff(np.log(real_close)),mv_cfg["regimes"])
+                mv_random=np.random.default_rng(reproducible_seed(trial["gene"],trial["side"],pair)+91828)
+                simulated=[]
+                for u in range(mv_cfg["universes"]):
+                    so,sh,sl,sc=synthetic_ohlc(real_open,real_hi,real_lo,real_close,mv_random,mv_cfg["mix"],u)
+                    satr=atr_wilder(sh,sl,sc,14)
+                    if kind in SITUATIONS or trial["context"] is not None:
+                        synthetic_df=pl.DataFrame({"timestamp":trial["timestamp"][offset:cut],"open":so,"high":sh,"low":sl,"close":sc})
+                    if kind in SITUATIONS:
+                        lev,local_days,valid=sweep_reference(synthetic_df,kind,source_timezone,trial["timeframe"])
+                        sg=sweep_signals(sh,sl,sc,lev,local_days,valid,SITUATIONS[kind][4],fast)
+                    else:
+                        sg=make_signals(kind,fast,slow,sc,sh,sl)
+                    if trial["context"] is not None:
+                        bias=confirmed_higher_bias(synthetic_df,synthetic_df,trial["context"])
+                        sg=np.where(sg==bias,sg,0).astype(np.int8)
+                    x_r,x_d=simulate_configured(
+                        sg,so,sh,sl,sc,satr,days[offset:cut],0,lookback,
+                        trial["side"],pair,trial["entry_variant"],
+                        allow_entry[offset:cut],forced_exit[offset:cut],weeks[offset:cut],months[offset:cut],
+                        trial["reference_cost_price"])
+                    x_metrics=summarize(x_r,x_d,cfg["risk_pct"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
+                                        sizing,cfg["initial_deposit"])
+                    x_style=stylized_fact_score(real_close,sc)
+                    simulated.append((x_metrics["expectancy_r"],x_metrics["max_drawdown_pct"],x_style))
+                multiverse=multiverse_report(simulated,mv_cfg,regimes)
+                multiverse["historical_bars_used"]=lookback
+                if not multiverse["eligible"]:
+                    reasons.append("Multiverso: score de robustez o drawdown P95 fuera de los límites")
+            except ValueError as exc:
+                multiverse={"enabled":True,"eligible":False,"error":str(exc)}
+                reasons.append("Multiverso: "+str(exc))
         # OOS funding diagnostics never influence candidate score or genetic selection.
         funding_is=trial["optimization_metrics"].get("funding_evaluation_is")
         funding_oos=None
@@ -506,12 +593,15 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
             funding_evaluation_is=funding_is,funding_evaluation_oos=funding_oos,
             in_sample=trial["in_sample"],
             quality_is=trial["quality_is"],quality_oos=quality_oos,
+            walk_forward=wf_report,multiverse=multiverse,
             estimated_cost_bps=trial["estimated_cost_bps"],
             out_of_sample=metrics_oos,monte_carlo=mc,
             accepted=not reasons,reasons=reasons,
         ))
     warnings += [
         "Avanzado: Stop/Limit requieren ejecución OHLC intrabar conservadora; si se llenan durante una barra, SL/TP se evalúa desde la siguiente. DCA/pirámide comparten presupuesto de riesgo y no simulan margen, slippage ni liquidez.",
+        "Walk-Forward: validación OOS cronológica; reoptimización significa re-selección del conjunto descubierto en IS utilizando únicamente datos anteriores a cada ventana, no búsqueda genética desde cero.",
+        "Multiverso: universos sintéticos generados solo de IS, con HMM de estados gaussianos y recálculo de señales; no sustituyen testing de mercado ni validan causalidad.",
         "Objetivo de optimización: "+optimization+"; ranking, selección genética y shortlist usan solo datos IS.",
         "Sharpe/Sortino/Calmar usan anualización 252 con PnL realizado al cierre del trade; no reconstruyen mark-to-market diario.",
         "Pass Rate de fondeo usa las fases, límites, consistencia, días mínimos y percentiles configurados; es un proxy Monte Carlo con balance realizado, NO cumplimiento íntegro de reglas de la firma.",
@@ -529,5 +619,5 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any]) -> dict:
     return dict(
         tested=len(all_trials),accepted=sum(1 for c in candidates if c["accepted"]),
         optimization_objective=optimization,funding_config=funding,quality_config=quality_cfg,
-        cost_config=costs_cfg,candidates=candidates,warnings=warnings,
+        cost_config=costs_cfg,walk_forward_config=wf_cfg,multiverse_config=mv_cfg,candidates=candidates,warnings=warnings,
     )
