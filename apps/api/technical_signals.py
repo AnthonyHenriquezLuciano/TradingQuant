@@ -212,7 +212,7 @@ def technical_signals(name:str,period:int,op,high,low,close):
             line=np.full(n,np.nan);line[p-1:]=np.convolve(close,w[::-1],mode="valid")
         elif name=="tech_lsma":
             x=np.arange(p);weights=(x-x.mean())/np.sum((x-x.mean())**2)
-            line=_sma(close,p)+np.convolve(close,weights[::-1],mode="valid").tolist()[0:0] if False else _sma(close,p)
+            line=_sma(close,p)
             regression=np.convolve(close,weights[::-1],mode="valid")
             line[p-1:]+=regression*(p-1-x.mean())
         elif name=="tech_wma":line=_wma(close,p)
