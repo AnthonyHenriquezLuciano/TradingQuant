@@ -59,7 +59,7 @@ export function FundingConfig({value,onChange,optimizationObjective,initialDepos
  const set=(patch:Partial<FundingSettings>)=>onChange({...c,...patch});
  const edit=(index:number,patch:Partial<FundingPhase>)=>set({phases:c.phases.map((p,i)=>i===index?{...p,...patch}:p)});
  const preset=PRESETS.find(x=>x.id===c.preset)||PRESETS[PRESETS.length-1];
- const apply=(p:Preset)=>set({...p.update,preset:p.id});
+ const apply=(p:Preset)=>onChange({...DEFAULT_FUNDING,...p.update,enabled:c.enabled,preset:p.id,simulations:c.simulations,bootstrap_block_days:c.bootstrap_block_days,min_pass_rate_pct:c.min_pass_rate_pct,pass_day_percentile:c.pass_day_percentile,max_pass_days_percentile:c.max_pass_days_percentile});
  return <div className="tq-funding">
    <div className="tq-fund-title"><div><span className="tq-fund-eyebrow">LABORATORIO / EVALUACIONES</span><h2>Simulador de fondeo</h2><p>Estima probabilidad de aprobar, tiempo requerido y riesgos por fase mediante Monte Carlo sobre operaciones históricas.</p></div>
     <label className="tq-fund-toggle"><input type="checkbox" checked={c.enabled} onChange={e=>set({enabled:e.target.checked})}/><span>{c.enabled?"Activado":"Desactivado"}</span></label></div>
