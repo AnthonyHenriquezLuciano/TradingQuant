@@ -80,6 +80,7 @@ def simulate_advanced_orders(
     trailing_started=False
 
     for i in range(max(41,start),end):
+        pending_stop_hit=False
         if days[i]!=last_day:
             last_day=days[i]
             day_open=equity
@@ -193,10 +194,16 @@ def simulate_advanced_orders(
             trailing_started=False
             deals_today+=1
             if entry_mode!=0:
-                continue   # intrabar fill; exit checks start on next bar
+                # If this fill bar also spans the stop, assume adverse chronology.
+                # Delaying that SL entirely would inflate pending-order backtests.
+                pending_stop_hit=(lo[i]<=stop if side>0 else hi[i]>=stop)
+                if not pending_stop_hit:
+                    continue
 
         price=np.nan
-        if forced[i]:
+        if pending_stop_hit:
+            price=stop
+        elif forced[i]:
             price=op[i]
         elif modeling==0:
             if side>0 and (op[i]<=stop or op[i]>=take):
@@ -258,6 +265,7 @@ def simulate_advanced_orders(
             # Stop-first already evaluated. Ladder triggers after risk checks.
             a=atr[i-1]
             if np.isfinite(a) and a>0:
+                scaled_dca=False
                 if dca_enabled and dca_count<dca_levels:
                     spacing=_distance(dca_spacing_unit,dca_spacing,a,initial_dist,dca_last)
                     trigger=dca_last-side*spacing
@@ -271,7 +279,8 @@ def simulate_advanced_orders(
                             sum_entry_qty+=added*fill
                             dca_last=fill
                             dca_count+=1
-                if pyramid_enabled and pyramid_count<pyramid_levels:
+                            scaled_dca=True
+                if pyramid_enabled and not scaled_dca and pyramid_count<pyramid_levels:
                     spacing=_distance(pyramid_spacing_unit,pyramid_spacing,a,initial_dist,pyramid_last)
                     trigger=pyramid_last+side*spacing
                     hit=(hi[i]>=trigger if side>0 else lo[i]<=trigger)
