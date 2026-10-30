@@ -81,3 +81,27 @@ def test_csv_invalid_header_rejected(tmp_path: Path):
     path.write_text("foo,bar\n" + "1,2\n"*400)
     with pytest.raises(ValueError, match="Faltan columnas"):
         load_data(path)
+
+
+def test_m1_resample_accepts_more_than_750000_historical_candles():
+    """Long MT5 histories must not be silently truncated or rejected at 750k."""
+    from datetime import datetime, timedelta
+    from engine import resample
+
+    total = 750_001
+    timestamps = pl.datetime_range(
+        datetime(2020, 1, 1),
+        datetime(2020, 1, 1) + timedelta(minutes=total-1),
+        interval="1m", eager=True,
+    )
+    source = pl.DataFrame({
+        "timestamp": timestamps,
+        "open": np.full(total, 100.0),
+        "high": np.full(total, 101.0),
+        "low": np.full(total, 99.0),
+        "close": np.full(total, 100.5),
+    })
+    bars = resample(source, "1m")
+    assert bars.height == total
+    assert bars[0, "timestamp"] == source[0, "timestamp"]
+    assert bars[-1, "timestamp"] == source[-1, "timestamp"]
