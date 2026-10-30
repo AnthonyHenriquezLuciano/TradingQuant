@@ -13,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from engine import load_data, describe_data
+from engine import load_data, describe_data, FAMILIES
 from engine_advanced import run_advanced
 from engine_capital import normalize_capital,normalize_risk_rules
 from engine_schedule import validate_schedule
@@ -132,10 +132,7 @@ class ExplorationRequest(BaseModel):
     multi_tf: Literal["individual","combined","both"] = "individual"
     generations: int = Field(default=8, ge=2, le=30)
     candidates: int = Field(default=100, ge=10, le=2000)
-    families: list[Literal["ema_cross", "rsi_reversion", "breakout",
-                           "london_high_sweep", "london_low_sweep",
-                           "asia_high_sweep", "asia_low_sweep",
-                           "previous_day_high_sweep", "previous_day_low_sweep"]]
+    families: list[str] = Field(min_length=1, max_length=len(FAMILIES))
     indicator_ranges: IndicatorRanges = Field(default_factory=IndicatorRanges)
     macro_indicators: list[str] = Field(default_factory=list, max_length=200)
     macro_rules: dict[str, dict] = Field(default_factory=dict)
@@ -163,6 +160,9 @@ class ExplorationRequest(BaseModel):
     def valid(self):
         if not self.families:
             raise ValueError("Selecciona al menos una familia de señales.")
+        unsupported = sorted(set(self.families) - set(FAMILIES.values()))
+        if unsupported:
+            raise ValueError("Indicadores no implementados para simulación: " + ", ".join(unsupported))
         try:
             capital=normalize_capital({"capital": self.capital, "rr": self.rr, "atr_multiplier": self.atr_multiplier})
             normalize_risk_rules(capital.get("risk_rules") or {})
