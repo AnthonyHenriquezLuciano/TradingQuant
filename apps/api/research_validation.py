@@ -121,11 +121,13 @@ def estimated_roundtrip_bps(costs:dict, symbol:str, reference_price:float, side:
     return max(0.,cash/notional*1e4)
 
 
-def realized_quality(r,days,observed_days,risk,sizing,metrics,trial_count=1):
+def realized_quality(r,days,observed_days,risk,sizing,metrics,trial_count=1,calendar_is_unique=False):
     """Realized daily Sharpe/DSR and trade frequency, no inferred floating equity."""
     r=np.asarray(r,dtype=float)
     days=np.asarray(days,dtype=np.int32)
-    unique=np.unique(np.asarray(observed_days,dtype=np.int32))
+    unique=np.asarray(observed_days,dtype=np.int32)
+    if not calendar_is_unique:
+        unique=np.unique(unique)
     daily=_daily_returns(r,days,unique,risk,sizing)
     n=len(daily)
     sharpe=0.
