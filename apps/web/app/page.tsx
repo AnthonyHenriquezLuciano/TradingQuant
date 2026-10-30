@@ -55,6 +55,20 @@ const formatDate=(value:string)=>{const d=new Date(value);return Number.isNaN(d.
 const n2=(x:number|null|undefined,d=2)=>x===null||x===undefined?"—":Number(x).toFixed(d);
 const pct=(x:number|null|undefined)=>x===null||x===undefined?"—":n2(x)+"%";
 const fCurrency=(n:number)=>new Intl.NumberFormat("es-DO").format(n);
+function apiErrorDetail(detail:unknown,fallback:string):string {
+ if(typeof detail==="string"&&detail.trim())return detail;
+ if(Array.isArray(detail)){
+  const errors=detail.slice(0,4).map(item=>{
+   if(!item||typeof item!=="object")return null;
+   const error=item as {loc?:Array<string|number>;msg?:string};
+   if(typeof error.msg!=="string")return null;
+   const location=Array.isArray(error.loc)?error.loc.filter(x=>x!=="body").join("."):"";
+   return location?location+": "+error.msg:error.msg;
+  }).filter((x):x is string=>Boolean(x));
+  if(errors.length)return "Revisa la configuración: "+errors.join(" · ");
+ }
+ return fallback;
+}
 const NAV: {section:string;items:{id:View|null;label:string;icon:LucideIcon;sub?:string}[]}[]=[
  {section:"PRINCIPAL",items:[{id:"accounts",label:"Cuentas",icon:Wallet},{id:"home",label:"Visión general",icon:LayoutDashboard}]},
  {section:"LABORATORIO",items:[{id:"sessions",label:"Creador de algoritmos",icon:WandSparkles},{id:null,label:"Portafolios",icon:Layers3,sub:"Próximamente"}]},
@@ -379,10 +393,11 @@ export default function Page(){
   if(activeSessionId)setSessions(prev=>prev.map(t=>t.id===activeSessionId?{...t,status:"running"}:t));
   try{
    const resp=await fetch(API+"/api/explorations/start",{method:"POST",headers:{"Content-Type":"application/json",...authHeaders},body:JSON.stringify(cfg)});
-   const body=await resp.json();
-   if(!resp.ok)throw Error(typeof body.detail==="string"?body.detail:"No se pudo iniciar la exploración.");
+   const body=await resp.json().catch(()=>({detail:null}));
+   if(!resp.ok)throw Error(apiErrorDetail(body.detail,"No se pudo iniciar la exploración (HTTP "+resp.status+")."));
+   if(typeof body.id!=="string"||!body.id)throw Error("El motor devolvió una respuesta de inicio inválida. Revisa sus registros.");
    setJobStatus(body);open("running");
-   const jobId=String(body.id);
+   const jobId=body.id;
    localStorage.setItem("tq_active_job",JSON.stringify({jobId,sessionId:activeSessionId,accountId:activeAccountId}));
    while(true){
      await new Promise(resolve=>setTimeout(resolve,1200));
@@ -406,7 +421,10 @@ export default function Page(){
   }catch(e){
    localStorage.removeItem("tq_active_job");
    if(activeSessionId)setSessions(prev=>prev.map(t=>t.id===activeSessionId?{...t,status:t.runId?"results":"draft"}:t));
-   setError(e instanceof Error?e.message:"Motor de backtesting no disponible.");
+   const message=e instanceof Error?e.message:"Motor de backtesting no disponible.";
+   setError(/^(Failed to fetch|NetworkError|Load failed)/i.test(message)
+    ?"No se pudo conectar con el Motor Científico local (127.0.0.1:8000). Confirma que esté abierto y reinicia TradingQuant si se cerró."
+    :message);
   }finally{setLoading(false)}
  }
  useEffect(()=>{
