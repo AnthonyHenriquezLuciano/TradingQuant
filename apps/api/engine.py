@@ -100,8 +100,6 @@ def resample(df: pl.DataFrame, timeframe: str) -> pl.DataFrame:
     ).drop_nulls().sort("timestamp")
     if len(bars) < 400:
         raise ValueError(f"No hay suficientes barras tras agrupar a {timeframe}; mínimo 400.")
-    if len(bars) > 750_000:
-        raise ValueError("Más de 750.000 velas a esta temporalidad; utiliza un timeframe superior o reduce el CSV.")
     return bars
 
 
