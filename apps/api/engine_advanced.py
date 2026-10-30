@@ -312,6 +312,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
     families = [i for i,name in FAMILIES.items() if name in cfg["families"]]
     if not families:
         raise ValueError("Selecciona alguna familia de indicadores.")
+    if on_progress is not None:
+        on_progress(0,budget,"filtrando histórico")
     source = filter_period(source, cfg)
     # Never label M5 source bars as M1 by "resampling" into empty minute buckets.
     source_step = source.select(
@@ -367,6 +369,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
 
 
     for (job_type, tf, htf), max_eval in zip(jobs,per):
+        if on_progress is not None:
+            on_progress(len(all_trials),budget,"preparando velas "+tf.upper())
         df = resample(source, tf)
         n = len(df)
         cut = int(n * cfg["is_ratio"] / 100)
@@ -374,17 +378,24 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
             raise ValueError("El intervalo "+tf+" no tiene suficientes velas IS/OOS.")
         op,hi,lo,close = (df[k].to_numpy() for k in ("open","high","low","close"))
         timestamps = df["timestamp"].to_numpy()
+        if on_progress is not None:
+            on_progress(len(all_trials),budget,"preparando horarios "+tf.upper())
         allow_entry,forced_exit,days,weeks,months=time_arrays(df,source_timezone,schedule)
         atr = atr_wilder(hi,lo,close,14)
+        is_calendar=np.unique(days[:cut])
         # Calibrate user-specified contract costs from IS prices only; freeze for OOS.
         cost_reference=float(np.median(op[:cut]))
         is_prices_cost={side:estimated_roundtrip_bps(costs_cfg,cfg["symbol"],
                          cost_reference,side,cfg["cost_bps"]) for side in directions}
         higher_bias = confirmed_higher_bias(source,df,htf) if htf else None
+        if on_progress is not None:
+            on_progress(len(all_trials),budget,"preparando referencias "+tf.upper())
         references = {
             k: sweep_reference(df,k,source_timezone,tf)
             for k in families if k in SITUATIONS
         }
+        if on_progress is not None:
+            on_progress(len(all_trials),budget,"explorando "+tf.upper())
         seen: set[tuple] = set()
         evaluated: list[dict] = []
         processed_count=0
@@ -420,15 +431,16 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
                 sizing,cfg["initial_deposit"],
             )
             score, optimization_metrics = objective_score(
-                optimization,r_is,d_is,days[:cut],cfg["risk_pct"],sizing,
+                optimization,r_is,d_is,is_calendar,cfg["risk_pct"],sizing,
                 cfg["initial_deposit"],cfg["prop_daily_pct"],cfg["prop_max_pct"],
                 seed=reproducible_seed(gene,side,pair),funding_config=funding,
+                calendar_is_unique=True,
             )
             if metrics_is["trades"] < max(4,cfg["min_trades"]):
                 score = -1e8 + metrics_is["trades"]
             processed_count+=1
-            if on_progress is not None and processed_count%4==0:
-                on_progress(len(all_trials)+processed_count,budget,"explorando")
+            if on_progress is not None and (processed_count%2==0 or max_eval<=20):
+                on_progress(len(all_trials)+processed_count,budget,"explorando "+tf.upper())
             return dict(
                 gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),in_sample=metrics_is,
                 reference_cost_price=cost_reference,
@@ -436,6 +448,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
                 trades_is=r_is,days_is=d_is,estimated_cost_bps=is_prices_cost[side],
                 optimization_metrics=optimization_metrics,
                 dataframe=(op,hi,lo,close,atr,days,cut,n,allow_entry,forced_exit,weeks,months),
+                calendar_is=is_calendar,
                 timeframe=tf,context=htf,model=job_type,
             )
 
@@ -494,7 +507,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
                         evaluated.append(trial)
         all_trials.extend(evaluated)
         if on_progress is not None:
-            on_progress(len(all_trials),budget,"explorando")
+            on_progress(len(all_trials),budget,"explorando "+tf.upper())
 
     # DSR's multiple-test correction counts attempted strategies on this SAME market.
     # Applying quality to all IS candidates before selecting the shortlist avoids
@@ -503,8 +516,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
     attempted_same_market=max(1,len(all_trials))
     for trial in all_trials:
         bars=trial["dataframe"]
-        realized=realized_quality(trial["trades_is"],trial["days_is"],bars[5][:bars[6]],
-                                  cfg["risk_pct"],sizing,trial["in_sample"],attempted_same_market)
+        realized=realized_quality(trial["trades_is"],trial["days_is"],trial["calendar_is"],
+                                  cfg["risk_pct"],sizing,trial["in_sample"],attempted_same_market,
+                                  calendar_is_unique=True)
         trial["quality_is"]=realized
         trial["quality_reasons_is"]=evaluate_quality(realized,quality_cfg)
         if not trial["quality_reasons_is"]:
@@ -529,6 +543,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
     cached_sweep_key = None
     cached_sweep_reference = None
     bias_cache = {}
+    if on_progress is not None:
+        on_progress(len(all_trials),budget,"reconstruyendo señales finalistas")
     for trial in sorted(shortlist, key=lambda t: (
         t["model"], t["timeframe"], t["context"] or "", t["gene"][0]
     )):
