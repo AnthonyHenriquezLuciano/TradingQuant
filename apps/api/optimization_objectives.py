@@ -58,12 +58,25 @@ def _daily_returns(
     # The date labels come from the exit bar and are never inferred from
     # the future. For daily compounding, aggregate changes to equity.
     equity = _realized_equity(r, risk_pct, sizing)
-    for i, day in enumerate(all_days):
-        matches = np.flatnonzero(dates == day)
-        if matches.size:
-            before = equity[matches[0]]
-            after = equity[matches[-1] + 1]
-            daily[i] = (after / before - 1.0) if before > 0 else -1.0
+    # Exits from the execution kernels are chronological. A binary search on
+    # their trading days avoids scanning every trade for every calendar day.
+    # The fallback preserves the former behavior for externally supplied
+    # out-of-order arrays.
+    dates = np.asarray(dates, dtype=np.int32)
+    if dates.size > 1 and np.any(dates[1:] < dates[:-1]):
+        for i, day in enumerate(all_days):
+            matches = np.flatnonzero(dates == day)
+            if matches.size:
+                before = equity[matches[0]]
+                after = equity[matches[-1] + 1]
+                daily[i] = (after / before - 1.0) if before > 0 else -1.0
+        return daily
+    starts = np.searchsorted(dates, all_days, side="left")
+    ends = np.searchsorted(dates, all_days, side="right")
+    active = ends > starts
+    before = equity[starts[active]]
+    after = equity[ends[active]]
+    daily[active] = np.divide(after, before, out=np.zeros_like(after), where=before > 0) - 1.0
     return daily
 
 
@@ -109,12 +122,15 @@ def objective_score(
     observed_days: np.ndarray, risk_pct: float, sizing: str,
     initial_deposit: float, daily_dd_pct: float, total_dd_pct: float,
     seed: int = 0, funding_config: dict | None = None,
+    calendar_is_unique: bool = False,
 ) -> tuple[float, dict]:
     """Higher score is better for every objective. Selection is entirely IS."""
     validate_objective(metric)
     r = np.asarray(outcomes, dtype=np.float64)
     days = np.asarray(exit_days, dtype=np.int32)
-    calendar = np.unique(np.asarray(observed_days, dtype=np.int32))
+    calendar = np.asarray(observed_days, dtype=np.int32)
+    if not calendar_is_unique:
+        calendar = np.unique(calendar)
     if calendar.size < 2 or r.size == 0:
         return -1e6, {"objective_score": -1e6}
 
