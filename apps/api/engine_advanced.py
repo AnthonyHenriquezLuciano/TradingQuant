@@ -373,6 +373,7 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
         if cut < 250 or n-cut < 100:
             raise ValueError("El intervalo "+tf+" no tiene suficientes velas IS/OOS.")
         op,hi,lo,close = (df[k].to_numpy() for k in ("open","high","low","close"))
+        timestamps = df["timestamp"].to_numpy()
         allow_entry,forced_exit,days,weeks,months=time_arrays(df,source_timezone,schedule)
         atr = atr_wilder(hi,lo,close,14)
         # Calibrate user-specified contract costs from IS prices only; freeze for OOS.
@@ -429,9 +430,9 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
             if on_progress is not None and processed_count%4==0:
                 on_progress(len(all_trials)+processed_count,budget,"explorando")
             return dict(
-                gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),signals=signals,in_sample=metrics_is,
+                gene=gene,side=side,exit_pair=pair,entry_variant=entry_variant,score=float(score),in_sample=metrics_is,
                 reference_cost_price=cost_reference,
-                timestamp=df["timestamp"].to_numpy(),
+                timestamp=timestamps,
                 trades_is=r_is,days_is=d_is,estimated_cost_bps=is_prices_cost[side],
                 optimization_metrics=optimization_metrics,
                 dataframe=(op,hi,lo,close,atr,days,cut,n,allow_entry,forced_exit,weeks,months),
@@ -519,6 +520,49 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
         warnings.append(f"Filtro de calidad IS: {len(all_trials)-len(valid_trials)} de {len(all_trials)} candidatos descartados antes de evaluar OOS.")
     if not valid_trials and all_trials:
         warnings.append("Los filtros de calidad rechazaron todos los candidatos en IS; reduce restricciones si deseas ampliar la exploración.")
+
+    # Keep complete OHLC history, but do not retain a 1-byte-per-bar signal
+    # vector for every evaluated candidate. With 5M bars and 2,000 trials
+    # that would occupy ~10 GB before accounting for prices and trades.
+    # Reconstruct deterministic signals only for the final IS-ranked shortlist.
+    # Sort reconstruction by market scenario / family to reuse session references.
+    cached_sweep_key = None
+    cached_sweep_reference = None
+    bias_cache = {}
+    for trial in sorted(shortlist, key=lambda t: (
+        t["model"], t["timeframe"], t["context"] or "", t["gene"][0]
+    )):
+        kind, fast, slow = trial["gene"]
+        op, hi, lo, close = trial["dataframe"][:4]
+        if kind in SITUATIONS:
+            sweep_key = (trial["model"], trial["timeframe"], trial["context"], kind)
+            if sweep_key != cached_sweep_key:
+                reference_frame = pl.DataFrame({
+                    "timestamp": trial["timestamp"], "high": hi, "low": lo,
+                })
+                cached_sweep_reference = sweep_reference(
+                    reference_frame, kind, source_timezone, trial["timeframe"]
+                )
+                cached_sweep_key = sweep_key
+            level, session_days, valid = cached_sweep_reference
+            signals = sweep_signals(
+                hi, lo, close, level, session_days, valid, SITUATIONS[kind][4], fast
+            )
+        elif FAMILIES[kind] in EXTENDED_FAMILIES:
+            signals = technical_signals(FAMILIES[kind], fast, op, hi, lo, close)
+        else:
+            signals = make_signals(kind, fast, slow, close, hi, lo)
+        if trial["context"] is not None:
+            bias_key = (trial["model"], trial["timeframe"], trial["context"])
+            if bias_key not in bias_cache:
+                lower_frame = pl.DataFrame({"timestamp": trial["timestamp"]})
+                bias_cache[bias_key] = confirmed_higher_bias(
+                    source, lower_frame, trial["context"]
+                )
+            signals = np.where(signals == bias_cache[bias_key], signals, 0).astype(np.int8)
+        trial["signals"] = signals
+    cached_sweep_reference = None
+    bias_cache.clear()
     candidates = []
     if on_progress is not None:
         on_progress(len(all_trials),budget,"validando")
@@ -527,7 +571,8 @@ def run_advanced(source: pl.DataFrame, cfg: dict[str, Any], on_progress=None) ->
         kind,fast,slow = gene
         op,hi,lo,cl,atr,days,cut,n,allow_entry,forced_exit,weeks,months = trial["dataframe"]
         pair=trial["exit_pair"]
-        trade_trace=np.full((max(1,n-cut),8),np.nan,dtype=np.float64)
+        # Every written trace row is populated by the execution kernel.
+        trade_trace=np.empty((max(1,n-cut),8),dtype=np.float64)
         r_oos,d_oos = simulate_configured(
             trial["signals"],op,hi,lo,cl,atr,days,cut,n,trial["side"],pair,
             trial["entry_variant"],allow_entry,forced_exit,weeks,months,trial["reference_cost_price"],trade_trace,
