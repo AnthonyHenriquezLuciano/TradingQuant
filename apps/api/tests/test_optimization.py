@@ -105,3 +105,31 @@ def test_in_sample_score_unaffected_by_out_of_sample_values():
     full=np.r_[train_r,100.,-100.]
     b=objective_score("sharpe",full[:5],np.arange(1,8)[:5],train_days,1.,"compound",5000.,3.,10.,42)[0]
     assert a==pytest.approx(b)
+
+
+def test_optimized_daily_returns_match_reference_with_no_trade_days():
+    from optimization_objectives import _daily_returns, _realized_equity
+    outcomes=np.array([.5,-1.,2.,-.5,1.,-1.,.2])
+    dates=np.array([1,1,4,4,4,8,10],dtype=np.int32)
+    all_days=np.arange(1,14,dtype=np.int32)
+    for sizing in ("fixed","compound"):
+        equity=_realized_equity(outcomes,1.25,sizing)
+        expected=np.zeros(len(all_days))
+        for index,day in enumerate(all_days):
+            matches=np.flatnonzero(dates==day)
+            if len(matches):
+                before=equity[matches[0]]
+                after=equity[matches[-1]+1]
+                expected[index]=after/before-1 if before>0 else -1.
+        actual=_daily_returns(outcomes,dates,all_days,1.25,sizing)
+        np.testing.assert_allclose(actual,expected,rtol=1e-12,atol=1e-12)
+
+
+def test_cached_calendar_matches_uncached_objective():
+    r=np.array([1.,-.25,.4,-1.,.8,.2])
+    dates=np.array([1,1,3,4,8,8],dtype=np.int32)
+    calendar=np.repeat(np.arange(1,11,dtype=np.int32),5)
+    for metric in ("balanced","sharpe","sortino","calmar","funding_pass_rate"):
+        old=objective_score(metric,r,dates,calendar,1.,"fixed",5000.,3.,10.,seed=42)
+        new=objective_score(metric,r,dates,np.unique(calendar),1.,"fixed",5000.,3.,10.,seed=42,calendar_is_unique=True)
+        assert new == old
