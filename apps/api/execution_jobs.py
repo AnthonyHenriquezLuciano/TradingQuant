@@ -28,24 +28,31 @@ class ResearchJobs:
                                "created_at":now,"updated_at":now,
                                "checked":0,"total":config.get("candidates",0),
                                "percent":0,"result":None,"error":None,
-                               "started":None,"elapsed_seconds":0}
+                               "started":None,"last_progress":None,
+                               "seconds_since_progress":0,"elapsed_seconds":0}
         def worker():
             with self.lock:
                 self.jobs[job_id].update(status="running",phase="cargando histórico",
-                                         started=monotonic())
+                                         started=monotonic(),last_progress=monotonic())
             def progress(checked,total,phase):
                 with self.lock:
                     job=self.jobs[job_id]
-                    if phase=="explorando":
+                    if phase.startswith("explorando"):
                         fraction=.08+.74*checked/max(1,total)
+                    elif phase.startswith("validando"):
+                        fraction=.83+.16*checked/max(1,total)
+                    elif phase.startswith("reconstruyendo"):
+                        fraction=.82
                     else:
-                        fraction=.82+.17*checked/max(1,total)
+                        fraction=.02+.05*checked/max(1,total)
+                    now=monotonic()
                     job.update(checked=int(checked),total=int(total),phase=phase,
                                percent=min(99,max(job["percent"],int(fraction*100))),
-                               elapsed_seconds=int(monotonic()-job["started"]))
+                               last_progress=now,seconds_since_progress=0,
+                               elapsed_seconds=int(now-job["started"]))
             try:
                 frame=load_func(dataset_path)
-                progress(0,config.get("candidates",0),"explorando")
+                progress(0,config.get("candidates",0),"filtrando histórico")
                 result=engine_func(frame,config,on_progress=progress)
                 output={"id":job_id,"created_at":now,
                         "dataset_id":config["dataset_id"],"config":config,**result}
@@ -70,7 +77,12 @@ class ResearchJobs:
             if job_id not in self.jobs:
                 return None
             j=self.jobs[job_id]
-            return {k:v for k,v in j.items() if k not in ("result","started")}
+            view={k:v for k,v in j.items() if k not in ("result","started","last_progress")}
+            if j["status"]=="running" and j["started"] is not None:
+                now=monotonic()
+                view["elapsed_seconds"]=int(now-j["started"])
+                view["seconds_since_progress"]=int(now-(j["last_progress"] or j["started"]))
+            return view
 
     def result(self,job_id):
         with self.lock:
